@@ -1,0 +1,9 @@
+{
+  "Parameters" : {
+    "Name":"mdp-notifications",
+    "Owner":"dbansal@homestoryrewards.com",
+    "Project":"managed-data-pipeline",
+    "Environment":"beta",
+    "BusinessUnit":"chase"
+  }
+}
