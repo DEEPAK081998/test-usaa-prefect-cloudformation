@@ -37,7 +37,7 @@
   },
   {
     "ParameterKey": "CodeStarConnectionId",
-    "ParameterValue": "c25f66c5-dda7-497d-ad74-dc0262107b25"
+    "ParameterValue": "fdbe5820-bc58-4d9d-a4b8-2ab2666852ac"
   },
   {
     "ParameterKey": "FullRepositoryName",
@@ -69,10 +69,14 @@
   },
   {
     "ParameterKey": "DeployBetaEnv",
-    "ParameterValue": "no"
+    "ParameterValue": "yes"
   },
   {
     "ParameterKey": "DeployProdEnv",
     "ParameterValue": "no"
+  },
+  {
+    "ParameterKey": "UseMDPNotificationsStack",
+    "ParameterValue": "yes"
   }
 ]

@@ -134,7 +134,7 @@ Resources:
         - codepipeline-pipeline-manual-approval-needed
       Targets:
         - TargetType: SNS
-          TargetAddress: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+          TargetAddress: arn:aws:sns:us-east-1:843995337787:mdp-notifications-sandbox-manual-approval-topic
       Tags:
         Name: !Ref Name
         Owner: !Ref Owner
@@ -156,7 +156,7 @@ Resources:
         - codepipeline-pipeline-pipeline-execution-failed
       Targets:
         - TargetType: SNS
-          TargetAddress: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
+          TargetAddress: arn:aws:sns:us-east-1:843995337787:datapipeline-sandbox-errors-topic
       Tags:
         Name: !Ref Name
         Owner: !Ref Owner
@@ -320,7 +320,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MdpSecretsChangeSetBuildVariables
+                  Namespace: MdpSecretsChangeSetBuildVariablesSandbox
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPUtilsStackNamePresent
@@ -341,7 +341,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MDPUtilsChangeSetBuildVariables
+                  Namespace: MDPUtilsChangeSetBuildVariablesSandbox
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPNotificationsStackNamePresent
@@ -362,7 +362,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MDPNotificationsChangeSetBuildVariables
+                  Namespace: MDPNotificationsChangeSetBuildVariablesSandbox
                 - !Ref "AWS::NoValue"
               - !If
                 - AirbyteStackNamePresent
@@ -383,7 +383,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirbyteChangeSetBuildVariables
+                  Namespace: AirbyteChangeSetBuildVariablesSandbox
                 - !Ref "AWS::NoValue"
               - !If
                 - AirflowStackNamePresent
@@ -404,7 +404,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirflowChangeSetBuildVariables
+                  Namespace: AirflowChangeSetBuildVariablesSandbox
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackNamePresent
@@ -439,7 +439,7 @@ Resources:
                   RunOrder: 2
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirflowChangeSetBuildVariables
+                  Namespace: AirflowChangeSetBuildVariablesSandbox
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPSecretsStackNamePresent
@@ -581,7 +581,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MdpSecretsChangeSetBuildVariables
+                  Namespace: MdpSecretsChangeSetBuildVariablesBeta
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPUtilsStackNamePresent
@@ -602,7 +602,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MDPUtilsChangeSetBuildVariables
+                  Namespace: MDPUtilsChangeSetBuildVariablesBeta
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPNotificationsStackNamePresent
@@ -623,7 +623,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MDPNotificationsChangeSetBuildVariables
+                  Namespace: MDPNotificationsChangeSetBuildVariablesBeta
                 - !Ref "AWS::NoValue"
               - !If
                 - AirbyteStackNamePresent
@@ -644,7 +644,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirbyteChangeSetBuildVariables
+                  Namespace: AirbyteChangeSetBuildVariablesBeta
                 - !Ref "AWS::NoValue"
               - !If
                 - AirflowStackNamePresent
@@ -665,7 +665,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirflowChangeSetBuildVariables
+                  Namespace: AirflowChangeSetBuildVariablesBeta
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackNamePresent
@@ -700,7 +700,7 @@ Resources:
                   RunOrder: 2
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirflowChangeSetBuildVariables
+                  Namespace: AirflowChangeSetBuildVariablesBeta
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPSecretsStackNamePresent
@@ -861,7 +861,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MdpSecretsChangeSetBuildVariables
+                  Namespace: MdpSecretsChangeSetBuildVariablesProd
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPUtilsStackNamePresent
@@ -882,7 +882,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MDPUtilsChangeSetBuildVariables
+                  Namespace: MDPUtilsChangeSetBuildVariablesProd
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPNotificationsStackNamePresent
@@ -903,7 +903,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: MDPNotificationsChangeSetBuildVariables
+                  Namespace: MDPNotificationsChangeSetBuildVariablesProd
                 - !Ref "AWS::NoValue"
               - !If
                 - AirbyteStackNamePresent
@@ -924,7 +924,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirbyteChangeSetBuildVariables
+                  Namespace: AirbyteChangeSetBuildVariablesProd
                 - !Ref "AWS::NoValue"
               - !If
                 - AirflowStackNamePresent
@@ -945,7 +945,7 @@ Resources:
                   RunOrder: 1
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirflowChangeSetBuildVariables
+                  Namespace: AirflowChangeSetBuildVariablesProd
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackNamePresent
@@ -980,7 +980,7 @@ Resources:
                   RunOrder: 2
                   InputArtifacts:
                     - Name: SourceCodeRepositoryDefault
-                  Namespace: AirflowChangeSetBuildVariables
+                  Namespace: AirflowChangeSetBuildVariablesProd
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPSecretsStackNamePresent
