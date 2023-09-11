@@ -1,0 +1,70 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "airbyte-connectors-flows-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "chase"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "c25f66c5-dda7-497d-ad74-dc0262107b25"
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/airbyte-connectors"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "main"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-06af8b78795b52913"
+  },
+  {
+    "ParameterKey": "CodeBuildSubnets",
+    "ParameterValue": "subnet-009971fbc3a5f7140"
+  },
+  {
+    "ParameterKey": "S3ArtifactBucket",
+    "ParameterValue": "mdp-prod-chase-bucket"
+  },
+  {
+    "ParameterKey": "AirbyteStackName",
+    "ParameterValue": "airbyte-prod-stack"
+  },
+  {
+    "ParameterKey": "S3DockerLocation",
+    "ParameterValue": "airbyte/connectors/images"
+  },
+  {
+    "ParameterKey": "DockerTag",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "EC2Username",
+    "ParameterValue": "ec2-user"
+  },
+  {
+    "ParameterKey": "MdpUtilsStackName",
+    "ParameterValue": "mdp-utils-prod-stack"
+  },
+  {
+    "ParameterKey": "MDPNotificationsStackName",
+    "ParameterValue": "mdp-notifications-prod-stack"
+  }
+]

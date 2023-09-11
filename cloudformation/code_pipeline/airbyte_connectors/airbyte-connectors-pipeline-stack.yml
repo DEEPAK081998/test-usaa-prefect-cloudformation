@@ -1,0 +1,404 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: CI/CD pipeline setup for airbyte-connectors deployment
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  CodeStarConnectionId:
+    Type: String
+    Description: bitbucket codestar connection id
+  FullRepositoryName:
+    Type: String
+    Description: Full name of repository which act as source for codepipeline
+  SourceBranchName:
+    Type: String
+    Description: name of the branch which act as source
+  VpcId:
+    Description: VPC to use
+    Type: AWS::EC2::VPC::Id
+  CodeBuildSubnets:
+    Description: The Subnets which Codebuild use
+    Type: List<AWS::EC2::Subnet::Id>
+  AirbyteStackName:
+    Type: String
+    Description: Name of Airbyte cloudformation stack
+  S3DockerLocation:
+    Type: String
+    Description: The location in bucket where to put docker images
+  DockerTag:
+    Type: String
+    Description: docker tag to give to all images
+  EC2Username:
+    Type: String
+    Description: username to of ec2 instance
+  S3ArtifactBucket:
+    Type: String
+    Description: S3 bucket name where to store codepipeline artifact
+  MDPNotificationsStackName:
+    Type: String
+    Description: Name of mdp notifications cloudformation stack
+  MDPUtilsStackName:
+    Type: String
+    Description: Name of mdp utils cloudformation stack
+
+Resources:
+  CodepipelineStatusNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Properties:
+      Name: !Sub "${Name}-${Environment}-manual-approval-rule"
+      DetailType: FULL
+      Resource: !Sub
+        - arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${PipelineName}
+        - PipelineName: !Ref CodePipeline
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+        - codepipeline-pipeline-pipeline-execution-canceled
+        - codepipeline-pipeline-pipeline-execution-started
+      Targets:
+        - TargetType: SNS
+          TargetAddress:
+            Fn::ImportValue: !Sub '${MDPNotificationsStackName}--MDPCodepipelineApprovalTopicArn'
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  CodepipelineFailureNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Description: Notification Rule to trigger codepipeline failure notifications to SNS
+    Properties:
+      Name: !Sub "${Name}-${Environment}-pipeline-failure-rule"
+      DetailType: FULL
+      Resource: !Sub
+        - arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${PipelineName}
+        - PipelineName: !Ref CodePipeline
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+      Targets:
+        - TargetType: SNS
+          TargetAddress:
+            Fn::ImportValue: !Sub '${MDPNotificationsStackName}-DatapipelineErrorsTopicArn'
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Sid: ''
+        Version: '2012-10-17'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSCodeStarServiceRole
+        - arn:aws:iam::aws:policy/AWSCodeStarFullAccess
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codestar-connections:UseConnection
+                Effect: Allow
+                Resource:
+                  - !Sub 'arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}'
+              - Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - s3:*
+                Effect: Allow
+                Resource:
+                  - !Sub 'arn:aws:s3:::${S3ArtifactBucket}'
+            Version: '2012-10-17'
+          PolicyName: codepipelinepolicy
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CodeBuildSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: Policies required by codebuild to access Airbyte instance
+    Properties:
+      GroupName: !Sub "${Name}-${Environment}-codebuild-security-group"
+      GroupDescription: Group for airbyte-pipeline codebuild security permission
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteCodebuildEC2Key:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: codebuild-airbyte-ssh-key
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteConnectorTestBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:6.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: DOCKER_TAG
+            Type: PLAINTEXT
+            Value: !Ref DockerTag
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+        Subnets: !Ref CodeBuildSubnets
+        VpcId: !Ref VpcId
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "build_specs/test-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteConnectorDeployBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Cache:
+        Location: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
+        Type: LOCAL
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:6.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: DOCKER_TAG
+            Type: PLAINTEXT
+            Value: !Ref DockerTag
+          - Name: EC2_USERNAME
+            Type: PLAINTEXT
+            Value: !Ref EC2Username
+          - Name: SSH_KEY
+            Type: PARAMETER_STORE
+            Value: !Sub "/ec2/keypair/${AirbyteCodebuildEC2Key.KeyPairId}"
+          - Name: ENVIRONMENT
+            Type: PLAINTEXT
+            Value: !Ref Environment
+          - Name: PORT
+            Type: PLAINTEXT
+            Value: "80"
+          - Name: MDP_BUCKET
+            Type: PLAINTEXT
+            Value:
+              Fn::ImportValue: !Sub '${MDPUtilsStackName}-S3BucketName'
+          - Name: EC2_IP_ADDRESS
+            Type: PLAINTEXT
+            Value:
+              Fn::ImportValue: !Sub '${AirbyteStackName}-EC2PrivateIp'
+        PrivilegedMode: True
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+        Subnets: !Ref CodeBuildSubnets
+        VpcId: !Ref VpcId
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "build_specs/deploy-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  EC2SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allows airbyte EC2 instance access from codebuild server
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref CodeBuildSecurityGroup
+      GroupId:
+        Fn::ImportValue: !Sub '${AirbyteStackName}-EC2SecurityGroupId'
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${Name}-${Environment}-pipeline'
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Location: !Ref S3ArtifactBucket 
+        Type: S3
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GetSourceCodeRepository
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Sub 'arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}'
+                BranchName: !Ref SourceBranchName
+                FullRepositoryId: !Ref FullRepositoryName
+                OutputArtifactFormat: CODEBUILD_CLONE_REF
+              OutputArtifacts:
+                - Name: SourceCodeRepository
+              Namespace: SourceVariables
+              RunOrder: 1
+        - Name: Test
+          Actions:
+            - Name: TestAirbyteConnectors
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref AirbyteConnectorTestBuild
+              RunOrder: 1
+              InputArtifacts:
+                - Name: SourceCodeRepository
+        - Name: Deploy
+          Actions:
+            - Name: DeployAirbyteConnectors
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref AirbyteConnectorDeployBuild
+              RunOrder: 1
+              InputArtifacts:
+                - Name: SourceCodeRepository
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+Outputs:
+  CodebuildKeyPairId:
+    Description: EC2 key pair id
+    Value: !GetAtt AirbyteCodebuildEC2Key.KeyPairId
+  ParameterStoreSSHKeyName:
+    Description: The name of the parameter store where ec2 sshh key is stored
+    Value: !Sub "/ec2/keypair/${AirbyteCodebuildEC2Key.KeyPairId}"

@@ -1,0 +1,66 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "airbyte-updates-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "beta"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/airbyte-updates"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "master"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "CodeBuildSubnets",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "S3ArtifactBucket",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "AirbyteStackName",
+    "ParameterValue": "airbyte-beta-stack"
+  },
+  {
+    "ParameterKey": "EC2Username",
+    "ParameterValue": "ec2-user"
+  },
+  {
+    "ParameterKey": "AirflowStackName",
+    "ParameterValue": "airflow-beta-stack"
+  },
+  {
+    "ParameterKey": "AirbyteCodebuildEC2Key",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MDPNotificationsStackName",
+    "ParameterValue": "mdp-notifications-beta-stack"
+  }
+]

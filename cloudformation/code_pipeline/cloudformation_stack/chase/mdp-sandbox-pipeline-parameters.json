@@ -1,0 +1,78 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "mdp-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "dbansal@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "mdp"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "sandbox"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "chase"
+  },
+  {
+    "ParameterKey": "S3ArtifactBucket",
+    "ParameterValue": "mdp-sandbox-chase-bucket-dev"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "feature/DB-USAA-456-test"
+  },
+  {
+    "ParameterKey": "AirbyteApplicationStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MdpSecretsStackName",
+    "ParameterValue": "mdp-secrets-sandbox-stack"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "c25f66c5-dda7-497d-ad74-dc0262107b25"
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "DEEPAK081998/test-usaa-prefect-cloudformation"
+  },
+  {
+    "ParameterKey": "AirflowApplicationStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MDPNotificationsStackName",
+    "ParameterValue": "mdp-notifications-sandbox-stack"
+  },
+  {
+    "ParameterKey": "LambdaCodeS3Path",
+    "ParameterValue": "lambdas/lambda-code"
+  },
+  {
+    "ParameterKey": "MDPUtilsStackName",
+    "ParameterValue": "mdp-utils-sandbox-stack"
+  },
+  {
+    "ParameterKey": "LayerS3Path",
+    "ParameterValue": "lambdas/lambda-layer"
+  },
+  {
+    "ParameterKey": "MdpLambdasStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "DeployBetaEnv",
+    "ParameterValue": "no"
+  },
+  {
+    "ParameterKey": "DeployProdEnv",
+    "ParameterValue": "no"
+  }
+]

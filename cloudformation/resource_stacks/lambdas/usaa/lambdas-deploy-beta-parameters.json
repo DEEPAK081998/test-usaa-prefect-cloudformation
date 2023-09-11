@@ -1,0 +1,16 @@
+{
+  "Parameters" : {
+    "Name": "lambda-stack",
+    "Owner": "bwalker@homestoryrewards.com",
+    "Project": "managed-data-pipeline",
+    "Environment": "beta",
+    "BusinessUnit": "usaa",
+    "LambdaS3Key": "lambdas/lambda-code",
+    "LambdaLayerS3Key": "lambdas/lambda-layer",
+    "MessagePollingRate": "6000",
+    "LambdaScheduleExpression": "cron(0/5 * * * ? *)",
+    "BitlyGroupId": "Bkclk4VG8Ix",
+    "EC2Subnet": ""
+  }
+}
+  

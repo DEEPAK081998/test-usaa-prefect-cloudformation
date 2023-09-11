@@ -1,0 +1,1195 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Setup of Airbyte server
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  VpcId:
+    Description: >
+      VPC to use.  Must include two availability zones each with both a private (with NAT and VPN) and public subnet
+    Type: AWS::SSM::Parameter::Value<String>
+  EC2Subnet:
+    Description: The subnet id in which to launch instance into
+    Type: AWS::SSM::Parameter::Value<String>
+  SSHKey:
+    Description: Key pair name which is used to log into ec2 instance
+    Type: AWS::SSM::Parameter::Value<String>
+  LoadBalancerSubnet:
+    Description: The Subnets which load balancer uses as avalabity zones
+    Type: AWS::SSM::Parameter::Value<List<String>>
+  ACMCertificate:
+    Description: The acm certificate for server name used
+    Type: AWS::SSM::Parameter::Value<String>
+  HostedZoneId:
+    Description: The Route53 Hosted zone ID
+    Type: AWS::SSM::Parameter::Value<String>
+  HostedZoneName:
+    Description: The Route53 Hosted zone server name
+    Type: AWS::SSM::Parameter::Value<String>
+  EC2InstanceType:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Instance type for Airbyte ec2 instance
+  RDSInstanceBackupRetentionPeriod:
+    Type: String
+    Description: Days till which RDS instance backups will be retained (Must be between 0 and 35)
+  AirbyteRDSSnapshotIdentifier:
+    Type: String
+    Description: Airbyte RDS instance snapshot identifier
+  AirbyteDWSnapshotIdentifier:
+    Type: String
+    Description: Airbyte data warehouse snapshot identifier
+  AirbyteDWAllocatedStorage:
+    Type: String
+    Description: Airbyte data warehouse allocated storage
+  AirbyteDWInstanceClass:
+    Type: String
+    Description: Airbyte data warehouse instance class (eg. db.t3.small, db.t3.large)
+  PostmarkWebhooksAPIResourcePath:
+    Type: String
+    Description: Resource path name of the API to post webhooks data
+  PostmarkWebhooksAPIStageName:
+    Type: String
+    Description: Stage name of the API to post webhooks data
+  AirbyteDWMaxAllocatedStorage:
+    Type: String
+    Description: Airbyte data warehouse max allocated storage
+
+Conditions:
+  UseAirbyteRDSSnapshotIdentifier: !Equals [!Ref AirbyteRDSSnapshotIdentifier, ""]
+  UseAirbyteDWSnapshotIdentifier: !Equals [!Ref AirbyteDWSnapshotIdentifier, ""]
+  IsBusinessUnitRe: !Equals [ !Ref BusinessUnit, "re" ]
+
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: The EC2 security policies required for Airbyte EC2 instance
+    Properties:
+      GroupName: !Sub "${Name}-${Environment}-ec2-wizard"
+      GroupDescription: Group for airbyte security permission
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "10.0.0.0/8"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: The security policies required for load balancer for proper working
+    Properties:
+      GroupName: !Sub "${Name}-${Environment}-elb-wizard"
+      GroupDescription: Group for airbyte load balancer security permission
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "10.0.0.0/8"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: The security policies required for RDS for proper working
+    Properties:
+      GroupName: !Sub "${Name}-${Environment}-rds-wizard"
+      GroupDescription: Group for airbyte rds security permission
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: "52.23.63.224/27"
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "10.0.0.0/8"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  QuickSightAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: Security group to allow access from Quicksight IP range"
+    Properties:
+      GroupDescription: "Allows access from Quicksight IP range"
+      GroupName: QuickSight
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          Description: "Allow traffic from chase-re-api-prod db"
+      VpcId: !Ref VpcId
+
+  HighTouchRDSSGIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: IsBusinessUnitRe
+    Properties:
+      Description: Allows access to DW from Hightouch
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: "54.196.30.169/32"
+      GroupId: !Ref RDSSecurityGroup
+
+  HighTouchRDSSGIngress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: IsBusinessUnitRe
+    Properties:
+      Description: Allows access to DW from Hightouch
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: "3.217.26.199/32"
+      GroupId: !Ref RDSSecurityGroup
+
+  HighTouchRDSSGIngress3:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: IsBusinessUnitRe
+    Properties:
+      Description: Allows access to DW from Hightouch
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: "3.224.126.197/32"
+      GroupId: !Ref RDSSecurityGroup
+
+  HighTouchRDSSGIngress4:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: IsBusinessUnitRe
+    Properties:
+      Description: Allows access to DW from Hightouch
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: "18.213.226.96/32"
+      GroupId: !Ref RDSSecurityGroup
+
+  HighTouchRDSSGIngress5:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: IsBusinessUnitRe
+    Properties:
+      Description: Allows access to DW from Hightouch
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: "52.72.201.213/32"
+      GroupId: !Ref RDSSecurityGroup
+
+  AirbyteS3BucketInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Description: Instance profile for Airbyte EC2 instance IAM role
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: AirbyteS3BucketRole
+
+  AirbyteS3BucketRole:
+    Type: AWS::IAM::Role
+    Description: IAM role for s3 bucket access from airbyte EC2 instance
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteCloudwatchLogsPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy for cloudwatch logs access from airbyte EC2 instance
+    Properties:
+      PolicyName: AirbyteCloudwatchLogsPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:DescribeLogStreams'
+              - 'logs:PutLogEvents'
+            Resource: !GetAtt AirbyteLogGroup.Arn
+      Roles:
+        - !Ref AirbyteS3BucketRole
+
+  S3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy for allowed actions on s3 resource
+    Properties:
+      PolicyName: !Sub "${Name}-${Environment}-S3AccessPolicy"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:List*
+              - s3:AbortMultipartUpload
+              - s3:DeleteObject
+              - s3:PutObjectAcl
+              - s3:GetBucketLocation
+            Resource:
+              - Fn::Sub:
+                  - "arn:aws:s3:::${S3BucketName}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+              - Fn::Sub:
+                  - "arn:aws:s3:::${S3BucketName}/*"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+              - Fn::Sub:
+                  - "arn:aws:s3:::${PartnerEmailS3BucketName}"
+                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-partner-email-s3-bucket-name}}"
+              - Fn::Sub:
+                  - "arn:aws:s3:::${PartnerEmailS3BucketName}/*"
+                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-partner-email-s3-bucket-name}}"
+      Roles:
+        - !Ref AirbyteS3BucketRole
+
+  CPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Description: Alarm for average CPU utilization by the instance per minute
+    Properties:
+      AlarmName: !Sub ${Name}-EC2-${Environment}-CPU-Utilization-alarm
+      AlarmDescription: CPU utilization alarm for EC2 instance
+      AlarmActions:
+        - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      Threshold: '75' # In Percentage
+      EvaluationPeriods: '1'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: InstanceId
+        Value:
+          Ref: EC2Instance
+
+  StatusCheckFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Description: Alarm for EC2 instance status check failure
+    Properties:
+      AlarmName: !Sub ${Name}-EC2-${Environment}-status-check-alarm
+      AlarmDescription: Trigger alarm when instance status check fails for 15 consecutive minutes.
+      AlarmActions:
+        - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed
+      Statistic: Minimum
+      Period: '60'
+      EvaluationPeriods: '15'
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: '0'
+      Dimensions:
+      - Name: InstanceId
+        Value:
+          Ref: EC2Instance
+
+  AirbyteLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Sub "${Name}-${Environment}-log-group"
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Description: The EC2 instance for setting up of Airbyte server
+    Properties:
+      ImageId: ami-08e4e35cccc6189f4
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !Ref SSHKey
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp2
+      SubnetId: !Ref EC2Subnet
+      IamInstanceProfile: !Ref AirbyteS3BucketInstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          sudo yum update -y
+          sudo yum install -y docker
+          sudo yum install amazon-cloudwatch-agent
+          sudo service docker start
+          sudo usermod -a -G docker ec2-user
+          sudo wget https://github.com/docker/compose/releases/download/latest/docker-compose-$(uname -s)-$(uname -m) -O /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          mkdir /home/ec2-user/airbyte
+          cd /home/ec2-user/airbyte
+          wget https://raw.githubusercontent.com/airbytehq/airbyte-platform/v0.43.0/{.env,docker-compose.yaml}
+          sudo cp .env .env.backup
+          sudo amazon-linux-extras enable nginx1
+          sudo yum clean metadata
+          sudo yum -y install nginx
+          sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+          sudo echo "user root;
+          events {
+           worker_connections 4096;
+          }
+          http {
+           server {
+           listen 80;
+           listen [::]:80;
+          server_name ${AirbyteDomainRecord};
+          location / {
+           proxy_pass http://localhost:8000;
+           proxy_set_header X-Real-IP \$remote_addr;
+           proxy_set_header Host \$host;
+           proxy_set_header X-Forward-For \$proxy_add_x_forwarded_for;
+           proxy_pass_header Accept;
+           proxy_pass_header Server;
+           proxy_http_version 1.1;
+           proxy_set_header ns_server-ui yes;
+           }
+           }
+          }" > /etc/nginx/nginx.conf
+          echo "All initial setup Done!!"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  LoadBalancerTarget:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Description: The target group to route traffic to airbyte ec2 instance
+    Properties:
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref VpcId
+      HealthCheckEnabled: True
+      TargetType: instance
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Description: The load balancer to route http/https data to target group
+    Properties:
+      IpAddressType: ipv4
+      Name: !Sub "${Name}-${Environment}-elb"
+      Scheme: internal
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets: !Ref LoadBalancerSubnet
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Description: The https listener for load balancer
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref ACMCertificate
+      DefaultActions:
+        - AuthenticateCognitoConfig:
+            SessionTimeout: 86400 # 1 day
+            UserPoolArn: !GetAtt AirbyteUserPool.Arn
+            UserPoolClientId: !Ref UserPoolClient
+            UserPoolDomain: !Ref AirbyteUserPoolDomain
+          Order: 1
+          Type: authenticate-cognito
+        - TargetGroupArn: !Ref LoadBalancerTarget
+          Order: 2
+          Type: forward
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-2016-08
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Description: The http listener for load balancer to redirect data to https
+    Properties:
+      DefaultActions:
+        - Order: 1
+          RedirectConfig:
+            Host: "#{host}"
+            Path: "/#{path}"
+            Port: 443
+            Protocol: HTTPS
+            Query: "#{query}"
+            StatusCode: HTTP_301
+          Type: redirect
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  AirbyteUserPool:
+    Type: AWS::Cognito::UserPool
+    Description: Cognito userpool for authentication of clients accessing airbyte server
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: False
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      MfaConfiguration: "OFF"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: True
+          RequireLowercase: True
+          RequireNumbers: True
+          RequireSymbols: True
+          TemporaryPasswordValidityDays: 7
+      Schema:
+        - Name: sub
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: False
+          Required: True
+          StringAttributeConstraints:
+            MinLength: '1'
+            MaxLength: '2048'
+        - Name: name
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          Required: False
+          StringAttributeConstraints:
+            MinLength: '0'
+            MaxLength: '2048'
+        - Name: email
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          Required: False
+          StringAttributeConstraints:
+            MinLength: '0'
+            MaxLength: '2048'
+        - Name: updated_at
+          AttributeDataType: Number
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          Required: False
+          NumberAttributeConstraints:
+            MinValue: '0'
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Description: The userpool client for google authentication
+    Properties:
+      UserPoolId: !Ref AirbyteUserPool
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: True
+      AllowedOAuthScopes:
+        - openid
+      CallbackURLs:
+        - !Sub "https://${AirbyteDomainRecord}/oauth2/idpresponse"
+        - !Sub "https://${AirbyteUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/oauth2/idpresponse"
+        - !Sub "https://${ApplicationLoadBalancer.DNSName}/oauth2/idpresponse"
+      RefreshTokenValidity: 30
+      SupportedIdentityProviders:
+        - Google
+      GenerateSecret: True
+
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Description: Allows login to airbyte using google
+    Properties:
+      UserPoolId: !Ref AirbyteUserPool
+      ProviderName: Google
+      ProviderType: Google
+      AttributeMapping:
+        username: "sub"
+      ProviderDetails:
+        client_id:
+          Fn::Sub:
+            - "{{resolve:secretsmanager:${GoogleOAuthSecretARN}:SecretString:ClientID}}"
+            - GoogleOAuthSecretARN: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-google-oauth-secret-arn}}"
+        client_secret:
+          Fn::Sub:
+            - "{{resolve:secretsmanager:${GoogleOAuthSecretARN}:SecretString:ClientSecret}}"
+            - GoogleOAuthSecretARN: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-google-oauth-secret-arn}}"
+        authorize_scopes: "profile email openid"
+
+  AirbyteUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Description: The domain to register for airbyte userpool
+    Properties:
+      Domain: !Sub "${Name}-${BusinessUnit}-${Environment}-airbyte"
+      UserPoolId: !Ref AirbyteUserPool
+
+  AirbyteDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Description: The server name which is used for accessing airbyte
+    Properties:
+      Name: !Sub "airbyte-${Environment}.${HostedZoneName}"
+      Type: "A"
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        EvaluateTargetHealth: False
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+      HostedZoneId: !Ref HostedZoneId
+
+  AirbyteRDSPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Description: DB password for Airbyte RDS instance
+    Properties:
+      Description: DB password for Airbyte RDS instance
+      GenerateSecretString:
+        IncludeSpace: false
+        ExcludePunctuation: true
+        RequireEachIncludedType: true
+        SecretStringTemplate: !Sub '{"username": "postgres"}'
+        GenerateStringKey: "password"
+      Name: !Sub "${Name}-${Environment}-airbyte-db-password"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Description: Secret target attachment resource between airbyte RDS and airbyte RDS secret
+    Properties:
+      SecretId: !Ref AirbyteRDSPasswordSecret
+      TargetId: !Ref AirbyteRDSInstance
+      TargetType: AWS::RDS::DBInstance
+
+  AirbyteRDSInstanceDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Description: The server name which is used for accessing airbyre RDS instance
+    Properties:
+      Name: !Sub "${Name}-${Environment}-airbyte-internal-db.${HostedZoneName}"
+      Type: "CNAME"
+      TTL: "300" # using default
+      ResourceRecords:
+        - !GetAtt AirbyteRDSInstance.Endpoint.Address
+      HostedZoneId: !Ref HostedZoneId
+    DependsOn: AirbyteRDSInstance
+
+  AirbyteRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Description: RDS DB instance for airbyte
+    Properties:
+      AllocatedStorage: 30
+      BackupRetentionPeriod: !Ref RDSInstanceBackupRetentionPeriod
+      CopyTagsToSnapshot: true
+      DBInstanceClass: db.t3.medium
+      DBSnapshotIdentifier: !Ref AirbyteRDSSnapshotIdentifier
+      DBSubnetGroupName: !Ref AirbyteSubnetGroup
+      DBName: !If [UseAirbyteRDSSnapshotIdentifier, airbyte, !Ref "AWS::NoValue"]
+      DeletionProtection: true
+      Engine: postgres
+      LicenseModel: postgresql-license
+      MasterUsername: postgres
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${AirbyteRDSPasswordSecret}:SecretString:password}}"
+      MultiAZ: true
+      StorageType: gp2
+      StorageEncrypted: true
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Description: Subnet group for airbyte RDS and airbyte DW (Data Warehouse) DB instances
+    Properties:
+      DBSubnetGroupDescription: Group for airbyte
+      DBSubnetGroupName: !Sub "${Name}-${Environment}-subnet-group"
+      SubnetIds: !Ref LoadBalancerSubnet
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteDataWarehouseSecret:
+    Type: AWS::SecretsManager::Secret
+    Description: DB password for Airbyte Data warehouse
+    Properties:
+      Description: DB password for Airbyte Data warehouse
+      GenerateSecretString:
+        IncludeSpace: false
+        ExcludePunctuation: true
+        RequireEachIncludedType: true
+        SecretStringTemplate: !Sub '{"username": "postgres"}'
+        GenerateStringKey: "password"
+      Name: !Sub "${Name}-${Environment}-airbyte-data-warehouse-password"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirbyteDataWarehouseAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Description: Secret target attachment resource between airbyte DW and airbyte DW secret
+    Properties:
+      SecretId: !Ref AirbyteDataWarehouseSecret
+      TargetId: !Ref AirbyteDataWareHouse
+      TargetType: AWS::RDS::DBInstance
+
+  AirbyteDataWarehouseDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Description: The server name which is used for accessing airbyre data warehouse
+    Properties:
+      Name: !Sub "${Name}-${Environment}-data-warehouse.${HostedZoneName}"
+      Type: "CNAME"
+      TTL: "300" # using default
+      ResourceRecords:
+        - !GetAtt AirbyteDataWareHouse.Endpoint.Address
+      HostedZoneId: !Ref HostedZoneId
+    DependsOn: AirbyteDataWareHouse
+
+  AirbyteDataWareHouse:
+    Type: AWS::RDS::DBInstance
+    Description: RDS DB instance for airbyte data warehouse
+    Properties:
+      AllocatedStorage: !Ref AirbyteDWAllocatedStorage
+      BackupRetentionPeriod: !Ref RDSInstanceBackupRetentionPeriod
+      CopyTagsToSnapshot: true
+      DBInstanceClass: !Ref AirbyteDWInstanceClass
+      DBSnapshotIdentifier: !Ref AirbyteDWSnapshotIdentifier
+      DBSubnetGroupName: !Ref AirbyteSubnetGroup
+      DBName: !If [UseAirbyteDWSnapshotIdentifier, warehouse_db, !Ref "AWS::NoValue"]
+      DeletionProtection: true
+      Engine: postgres
+      LicenseModel: postgresql-license
+      MasterUsername: postgres
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${AirbyteDataWarehouseSecret}:SecretString:password}}"
+      MultiAZ: true
+      StorageType: gp2
+      StorageEncrypted: true
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      MaxAllocatedStorage: !Ref AirbyteDWMaxAllocatedStorage
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksSQSQueue:
+    Type: AWS::SQS::Queue
+    Description: Queue to store messages sent from APIGateway
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 10
+      VisibilityTimeout: 900 # Max lambda execution time
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt PostmarkWebhooksDeadLetterQueue.Arn
+        maxReceiveCount: 2
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Description: Dead letter queue for postmark webhooks queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 10
+      VisibilityTimeout: 900 # Max lambda execution time
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksAPIGatewayRole:
+    Type: AWS::IAM::Role
+    Description: IAM role for postmark webhooks api gateway
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksSQSPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow actions on postmark webhooks SQS queue
+    Properties:
+      PolicyName: PostmarkWebhooksSQSPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Action: "sqs:SendMessage"
+            Resource: !GetAtt PostmarkWebhooksSQSQueue.Arn
+      Roles:
+        - !Ref PostmarkWebhooksAPIGatewayRole
+
+  PostmarkWebhooksCloudwatchPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy for allowed actions on logs
+    Properties:
+      PolicyName: PostmarkWebhooksCloudwatchPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+              - 'logs:PutLogEvents'
+              - 'logs:GetLogEvents'
+              - 'logs:FilterLogEvents'
+            Resource: '*'
+      Roles:
+        - !Ref PostmarkWebhooksAPIGatewayRole
+
+  PostmarkWebhooksRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: Restapi resource for postmark webhooks
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Name: !Sub "${Name}-${Environment}-postmark-webhook-api"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksApiResource:
+    Type: AWS::ApiGateway::Resource
+    Description: Parent resource which the postmark webhook calls
+    Properties:
+      RestApiId: !Ref PostmarkWebhooksRestApi
+      ParentId: !GetAtt PostmarkWebhooksRestApi.RootResourceId
+      PathPart: !Ref PostmarkWebhooksAPIResourcePath
+
+  PostmarkWebhooksApiPostMethod:
+    Type: AWS::ApiGateway::Method
+    Description: POST method to accept postmark webhooks data and send to SQS queue
+    Properties:
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      HttpMethod: POST
+      Integration:
+        Credentials: !GetAtt PostmarkWebhooksAPIGatewayRole.Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: '200'
+        PassthroughBehavior: NEVER
+        RequestParameters:
+          integration.request.header.Content-Type: '''application/x-www-form-urlencoded'''
+        RequestTemplates:
+          application/json: Action=SendMessage&MessageBody=$input.body
+        Type: AWS
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${PostmarkWebhooksSQSQueue.QueueName}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          StatusCode: '200'
+      OperationName: PostWebhook
+      RestApiId: !Ref PostmarkWebhooksRestApi
+      ResourceId: !Ref PostmarkWebhooksApiResource
+
+  PostmarkWebhooksApiDeploymentStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref PostmarkWebhooksApiDevDeployment
+      Description: Dev stage for APIGateway
+      RestApiId: !Ref PostmarkWebhooksRestApi
+      StageName: !Ref PostmarkWebhooksAPIStageName
+      MethodSettings:
+        - MetricsEnabled: True
+          LoggingLevel: INFO
+          HttpMethod: '*'
+          ResourcePath: '/*'
+          DataTraceEnabled: True
+      TracingEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+
+  PostmarkWebhooksApiDevDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Description: Deploys the RestAPI resource to Development stage
+    DependsOn: PostmarkWebhooksApiPostMethod
+    Properties:
+      Description: SQS API Deployment
+      RestApiId: !Ref PostmarkWebhooksRestApi
+
+  PostmarkWebhooksApiKeySecretCredential:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Contains the secret manager resource for postmark webhooks api key
+      GenerateSecretString:
+        ExcludePunctuation: true
+        PasswordLength: 32
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub "${Name}-${Environment}-postmark-webhook-api-key"
+      Description: Postmark webhooks api key
+      Enabled: true
+      Value: !Sub "{{resolve:secretsmanager:${PostmarkWebhooksApiKeySecretCredential}:SecretString}}"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: PostmarkWebhooksApiDeploymentStage
+    Properties:
+      Description: !Sub "Postmark webhooks api usage plan"
+      UsagePlanName: !Sub "${Name}-${Environment}-postmark-webhook-usage-plan"
+      ApiStages:
+        - ApiId: !Ref PostmarkWebhooksRestApi
+          Stage: !Ref PostmarkWebhooksAPIStageName
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PostmarkWebhooksApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Description: Associate the postmark webhooks api key with the usage plan
+    Properties:
+      KeyId: !Ref PostmarkWebhooksApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref PostmarkWebhooksApiUsagePlan
+
+  DWLowStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
+      AlarmDescription: Alarm for low storage in DW
+      AlarmName: !Sub "${Name}-${Environment}-dw-low-storage-alarm"
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Id: e1
+          Expression: !Sub "100*(m1/(${AirbyteDWAllocatedStorage}*1024*1024*1024))"
+          Label: DW Storage left(percent)
+          ReturnData: true
+        - Id: m1
+          MetricStat:
+            Metric:
+              Namespace: AWS/RDS
+              MetricName: FreeStorageSpace
+              Dimensions:
+                - Name: DBInstanceIdentifier
+                  Value: !Ref AirbyteDataWareHouse
+            Period: 300 # 5 minutes
+            Stat: Minimum
+          ReturnData: false
+      Threshold: 10 # when storage less than 10 percent
+  
+  EC2PrivateIpParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Private IP Address of airbyte ec2 instance
+      Name: !Sub "${BusinessUnit}-${Environment}-ec2-private-ip"
+      Type: String
+      Value: !Ref EC2Instance.PrivateIp
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  EC2SecurityGroupIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: ID of airbyte EC2 security group
+      Name: !Sub "${BusinessUnit}-${Environment}-ec2-security-group-id"
+      Type: String
+      Value: !Ref EC2SecurityGroup
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  AirbyteLogGroupNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Name of airbyte ec2 log group
+      Name: !Sub "${BusinessUnit}-${Environment}-airbyte-log-group-name"
+      Type: String
+      Value: !Ref AirbyteLogGroup
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  PostmarkWebhooksSQSQueueNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Name of the PostmarkWebhooks SQS Queue
+      Name: !Sub "${BusinessUnit}-${Environment}-postmark-webhooks-sqs-queue-name"
+      Type: String
+      Value: !Ref PostmarkWebhooksSQSQueue.QueueName
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  PostmarkWebhooksSQSQueueArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: ARN of the PostmarkWebhooks SQS Queue
+      Name: !Sub "${BusinessUnit}-${Environment}-postmark-webhooks-sqs-queue-arn"
+      Type: String
+      Value: !Ref !Ref PostmarkWebhooksSQSQueue.Arn
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+Outputs:
+  ServerName:
+    Value: !Ref AirbyteDomainRecord
+  AirbyteRDSInstanceDomainName:
+    Value: !Ref AirbyteRDSInstanceDomainRecord
+  AirbyteDataWarehouseDomainName:
+    Value: !Ref AirbyteDataWarehouseDomainRecord
+  RDSPort:
+    Value: !GetAtt AirbyteRDSInstance.Endpoint.Port
+  RDSSecretManagerARN:
+    Description: ARN of the secret manager that holds the rds connection info
+    Value: !Ref AirbyteRDSPasswordSecret
+  ElbDnsName:
+    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
+  PostmarkWebhooksApiEndpoint:
+    Description: "Postmark webhooks api endpoint"
+    Value: !Sub "https://${PostmarkWebhooksRestApi}.execute-api.${AWS::Region}.amazonaws.com/${PostmarkWebhooksAPIStageName}/${PostmarkWebhooksAPIResourcePath}"

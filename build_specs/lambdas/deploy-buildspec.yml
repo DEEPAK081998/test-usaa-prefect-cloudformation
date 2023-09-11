@@ -1,0 +1,19 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+  pre_build:
+    commands:
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - echo "Updating lambda layer"
+      - if [ -n "${LAYER_S3_PATH}" ]; then
+          python scripts/lambda_manager.py --update-layer --s3-bucket ${MDP_BUCKET} --s3-key ${LAYER_S3_PATH} --stack-name ${LAMBDA_STACK_NAME};
+        fi
+      - echo "Updating lambda function configuration"
+      - python scripts/lambda_manager.py --update-lambda-config --s3-bucket ${MDP_BUCKET} --s3-key ${LAMBDA_CODE_S3_PATH} --stack-name ${LAMBDA_STACK_NAME};
+      - echo "Updating lambda function code"
+      - python scripts/lambda_manager.py --update-lambda --s3-bucket ${MDP_BUCKET} --s3-key ${LAMBDA_CODE_S3_PATH} --stack-name ${LAMBDA_STACK_NAME};

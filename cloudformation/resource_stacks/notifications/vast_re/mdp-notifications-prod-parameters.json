@@ -1,0 +1,9 @@
+{
+  "Parameters" : {
+    "Name":"mdp-notifications",
+    "Owner":"bwalker@homestoryrewards.com",
+    "Project":"managed-data-pipeline",
+    "Environment":"prod",
+    "BusinessUnit":"re"
+  }
+}

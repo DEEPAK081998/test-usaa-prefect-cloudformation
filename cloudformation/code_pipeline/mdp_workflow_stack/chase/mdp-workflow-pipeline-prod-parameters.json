@@ -1,0 +1,90 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "workflow-resources-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "chase"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "main"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "c25f66c5-dda7-497d-ad74-dc0262107b25"
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/prefect-flows"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-06af8b78795b52913"
+  },
+  {
+    "ParameterKey": "CodeBuildSubnets",
+    "ParameterValue": "subnet-009971fbc3a5f7140"
+  },
+  {
+    "ParameterKey": "S3ArtifactBucket",
+    "ParameterValue": "mdp-prod-chase-bucket"
+  },
+  {
+    "ParameterKey": "AirbyteStackName",
+    "ParameterValue": "airbyte-prod-stack"
+  },
+  {
+    "ParameterKey": "MDPSecretsStackName",
+    "ParameterValue": "mdp-secrets-prod-stack"
+  },
+  {
+    "ParameterKey": "AirflowStackName",
+    "ParameterValue": "airflow-prod-stack"
+  },
+  {
+    "ParameterKey": "AirbyteScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "AirflowScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "DbtScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "GreatExpectationsScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "QuicksightScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MDPNotificationsStackName",
+    "ParameterValue": "mdp-notifications-prod-stack"
+  },
+  {
+    "ParameterKey": "OctaviaStateFilePath",
+    "ParameterValue": "airbyte/connectors/state/connector_states.zip"
+  },
+  {
+    "ParameterKey": "MDPUtilsStackName",
+    "ParameterValue": "mdp-utils-prod-stack"
+  }
+]

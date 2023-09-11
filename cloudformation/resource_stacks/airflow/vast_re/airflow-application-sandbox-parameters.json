@@ -1,0 +1,13 @@
+{
+  "Parameters" : {
+    "Name": "airflow-infra",
+    "Owner": "brian@homestoryrewards.com",
+    "Project": "managed-data-pipeline",
+    "Environment": "sandbox",
+    "BusinessUnit": "re",
+    "VpcId": "",
+    "AirflowSubnets": "",
+    "DagsS3Path": "airflow/dags",
+    "AirflowExtrasS3Path": "airflow"
+  }
+}

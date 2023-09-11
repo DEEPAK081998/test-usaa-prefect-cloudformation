@@ -1,0 +1,1191 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: CI/CD pipeline setup for mdp application stack
+
+Parameters:
+  Name:
+    Type: String
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment on which the template is loading
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  S3ArtifactBucket:
+    Type: String
+    Description: S3 bucket name where to store codepipeline artifact
+  SourceBranchName:
+    Type: String
+    Description: name of the branch which act as source
+  CodeStarConnectionId:
+    Type: String
+    Description: bitbucket codestar connection id
+  FullRepositoryName:
+    Type: String
+    Description: Full name of repository which act as source fro codepipeline
+  MDPUtilsStackName:
+    Type: String
+    Description: Name of mdp utils cloudformation stack
+  MdpSecretsStackName:
+    Type: String
+    Description: Name of mdp secrets cloudformation stack
+  MDPNotificationsStackName:
+    Type: String
+    Description: Name of mdp notifications cloudformation stack
+  AirbyteApplicationStackName:
+    Type: String
+    Description: Name of airbyte application cloudformation stack
+  AirflowApplicationStackName:
+    Type: String
+    Description: Name of airflow cloudformation stack
+  MdpLambdasStackName:
+    Type: String
+    Description: Name of lambda cloudformation stack
+  LambdaCodeS3Path:
+    Type: String
+    Description: path in s3 bucket where all lambda code is stored
+  LayerS3Path:
+    Type: String
+    Description: path in s3 bucket where all lambda layer is stored
+  DeploySandboxEnv:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+    Description: Indicates whether or not to deploy resources on sandbox env
+  DeployBetaEnv:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+    Description: Indicates whether or not to deploy resources on beta env
+  DeployProdEnv:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+  UseMDPNotificationsStack:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+    Description: Indicates whether or not to use mdp notification stack
+  UseAirflowStack:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+    Description: Indicates whether or not to use airflow stack
+  UseAirbyteStack:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+    Description: Indicates whether or not to use airbyte stack
+
+Conditions:
+  IsSandboxEnv: !Equals [ !Ref Environment, "sandbox" ]
+  IsNotSandboxEnv: !Not [ Condition: IsSandboxEnv ]
+  MDPUtilsStackNamePresent: !Not [ !Equals [ !Ref MDPUtilsStackName, "" ] ]
+  MDPSecretsStackNamePresent: !Not [ !Equals [ !Ref MdpSecretsStackName, "" ] ]
+  MDPNotificationsStackNamePresent: !Not [ !Equals [ !Ref MDPNotificationsStackName, "" ] ]
+  AirbyteStackNamePresent: !Not [ !Equals [ !Ref AirbyteApplicationStackName, "" ] ]
+  AirflowStackNamePresent: !Not [ !Equals [ !Ref AirflowApplicationStackName, "" ] ]
+  MDPLambdasStackNamePresent: !Not [ !Equals [ !Ref MdpLambdasStackName, "" ] ]
+  DeploySandboxEnv: !Equals [ !Ref DeploySandboxEnv, "yes" ]
+  DeployBetaEnv: !Equals [ !Ref DeployBetaEnv, "yes" ]
+  DeployProdEnv: !Equals [ !Ref DeployProdEnv, "yes" ]
+  UseMDPNotificationsStack: !Equals [ !Ref UseMDPNotificationsStack, "yes" ]
+  UseAirflowStack: !Equals [ !Ref UseAirflowStack, "yes" ]
+  UseAirbyteStack: !Equals [ !Ref UseAirbyteStack, "yes" ]
+
+Resources:
+  CodepipelineStatusNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Condition: UseMDPNotificationsStack
+    Description: Notification rule for sending code pipeline status events to SNS
+    Properties:
+      Name: !Sub "${Name}-${Environment}-manual-approval-rule"
+      DetailType: FULL
+      Resource: !Sub
+        - arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${PipelineName}
+        - PipelineName: !Ref ApplicationPipeline
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+        - codepipeline-pipeline-pipeline-execution-canceled
+        - codepipeline-pipeline-pipeline-execution-started
+        - codepipeline-pipeline-manual-approval-needed
+      Targets:
+        - TargetType: SNS
+          TargetAddress: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  CodepipelineFailureNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Condition: UseMDPNotificationsStack
+    Description: Notification Rule to trigger codepipeline failure notifications to SNS
+    Properties:
+      Name: !Sub "${Name}-${Environment}-pipeline-failure-rule"
+      DetailType: FULL
+      Resource: !Sub
+        - arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${PipelineName}
+        - PipelineName: !Ref ApplicationPipeline
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+      Targets:
+        - TargetType: SNS
+          TargetAddress: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Description: IAM role for application code pipeline
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+              - codepipeline.amazonaws.com
+              - cloudformation.amazonaws.com
+            Sid: ''
+        Version: '2012-10-17'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSCodeStarServiceRole
+        - arn:aws:iam::aws:policy/AWSCodeStarFullAccess
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codestar-connections:UseConnection
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
+              - Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - s3:*
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:s3:::${S3ArtifactBucket}"
+            Version: '2012-10-17'
+          PolicyName: codepipelinepolicy
+        - PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'  
+            Version: "2012-10-17"
+          PolicyName: root-policy
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Description: IAM role for code build
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  ApplicationPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Description: Code pipeline for airbyte, airflow and mdp-secrets application stack
+    Properties:
+      Name: !Sub "${Name}-${Environment}-pipeline"
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Location: !Ref S3ArtifactBucket
+        Type: S3
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GetSourceCodeRepository
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
+                BranchName: !Ref SourceBranchName
+                FullRepositoryId: !Ref FullRepositoryName
+                OutputArtifactFormat: CODEBUILD_CLONE_REF
+                DetectChanges: true
+              OutputArtifacts:
+                - Name: SourceCodeRepository
+              Namespace: SourceVariables
+              RunOrder: 1
+            - Name: GetSourceCodeRepositoryDefault
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
+                BranchName: !Ref SourceBranchName
+                FullRepositoryId: !Ref FullRepositoryName
+                DetectChanges: false
+              OutputArtifacts:
+                - Name: SourceCodeRepositoryDefault
+              Namespace: SourceVariablesDefault
+              RunOrder: 1
+        - !If
+          - DeploySandboxEnv
+          - Name: Sandbox
+            Actions:
+              - !If
+                - MDPSecretsStackNamePresent
+                - Name: BuildMdpSecretsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpSecretsStackName
+                    ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/${BusinessUnit}/mdp-secrets-sandbox-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MdpSecretsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPUtilsStackNamePresent
+                - Name: BuildMDPUtilsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPUtilsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/${BusinessUnit}/mdp-utils-sandbox-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MDPUtilsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPNotificationsStackNamePresent
+                - Name: BuildMDPNotificationsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPNotificationsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/${BusinessUnit}/mdp-notifications-sandbox-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MDPNotificationsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirbyteStackNamePresent
+                - Name: BuildAirbyteChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirbyteApplicationStackName 
+                    ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/${BusinessUnit}/airbyte-application-sandbox-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirbyteChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirflowStackNamePresent
+                - Name: BuildAirflowChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirflowApplicationStackName
+                    ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/${BusinessUnit}/airflow-application-sandbox-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirflowChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: TestAndUploadLambdas
+                  ActionTypeId:
+                    Category: Build
+                    Owner: AWS
+                    Provider: CodeBuild
+                    Version: '1'
+                  Configuration:
+                    ProjectName: !Ref LambdasTestCodeBuildServer
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepository
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: BuildLambdasChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpLambdasStackName
+                    ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambda-deploy-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/${BusinessUnit}/lambdas-deploy-sandbox-parameters.json'
+                  RunOrder: 2
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirflowChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPSecretsStackNamePresent
+                - Name: ApplyMdpSecretsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpSecretsStackName
+                    ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
+                  RunOrder: 3
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPUtilsStackNamePresent
+                - Name: ApplyMDPUtilsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPUtilsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
+                  RunOrder: 3
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPNotificationsStackNamePresent
+                - Name: ApplyMDPNotificationsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPNotificationsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
+                  RunOrder: 4
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirbyteStackNamePresent
+                - Name: ApplyAirbyteChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirbyteApplicationStackName
+                    ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
+                  RunOrder: 5
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirflowStackNamePresent
+                - Name: ApplyAirflowChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirflowApplicationStackName
+                    ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
+                  RunOrder: 5
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: ApplyLambdasChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpLambdasStackName
+                    ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambdas-deploy-stack.yml'
+                  RunOrder: 6
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: UpdateLambdas
+                  ActionTypeId:
+                    Category: Build
+                    Owner: AWS
+                    Provider: CodeBuild
+                    Version: '1'
+                  Configuration:
+                    ProjectName: !Ref LambdasDeployCodeBuildServer
+                  RunOrder: 7
+                  InputArtifacts:
+                    - Name: SourceCodeRepository
+                - !Ref "AWS::NoValue"
+          - !Ref "AWS::NoValue"
+        - !If
+          - DeployBetaEnv
+          - Name: Beta
+            Actions:
+              - !If
+                - MDPSecretsStackNamePresent
+                - Name: BuildMdpSecretsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpSecretsStackName
+                    ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/${BusinessUnit}/mdp-secrets-beta-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MdpSecretsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPUtilsStackNamePresent
+                - Name: BuildMDPUtilsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPUtilsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/${BusinessUnit}/mdp-utils-beta-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MDPUtilsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPNotificationsStackNamePresent
+                - Name: BuildMDPNotificationsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPNotificationsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/${BusinessUnit}/mdp-notifications-beta-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MDPNotificationsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirbyteStackNamePresent
+                - Name: BuildAirbyteChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirbyteApplicationStackName 
+                    ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/${BusinessUnit}/airbyte-application-beta-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirbyteChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirflowStackNamePresent
+                - Name: BuildAirflowChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirflowApplicationStackName
+                    ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/${BusinessUnit}/airflow-application-beta-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirflowChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: TestAndUploadLambdas
+                  ActionTypeId:
+                    Category: Build
+                    Owner: AWS
+                    Provider: CodeBuild
+                    Version: '1'
+                  Configuration:
+                    ProjectName: !Ref LambdasTestCodeBuildServer
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepository
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: BuildLambdasChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpLambdasStackName
+                    ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambda-deploy-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/${BusinessUnit}/lambdas-deploy-beta-parameters.json'
+                  RunOrder: 2
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirflowChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPSecretsStackNamePresent
+                - Name: ApplyMdpSecretsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpSecretsStackName
+                    ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
+                  RunOrder: 3
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPUtilsStackNamePresent
+                - Name: ApplyMDPUtilsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPUtilsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
+                  RunOrder: 3
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPNotificationsStackNamePresent
+                - Name: ApplyMDPNotificationsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPNotificationsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
+                  RunOrder: 4
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirbyteStackNamePresent
+                - Name: ApplyAirbyteChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirbyteApplicationStackName
+                    ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
+                  RunOrder: 5
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirflowStackNamePresent
+                - Name: ApplyAirflowChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirflowApplicationStackName
+                    ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
+                  RunOrder: 5
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: ApplyLambdasChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpLambdasStackName
+                    ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambdas-deploy-stack.yml'
+                  RunOrder: 6
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: UpdateLambdas
+                  ActionTypeId:
+                    Category: Build
+                    Owner: AWS
+                    Provider: CodeBuild
+                    Version: '1'
+                  Configuration:
+                    ProjectName: !Ref LambdasDeployCodeBuildServer
+                  RunOrder: 7
+                  InputArtifacts:
+                    - Name: SourceCodeRepository
+                - !Ref "AWS::NoValue"
+          - !Ref "AWS::NoValue"
+        - !If
+          - IsNotSandboxEnv
+          - Name: Approval
+            Actions:
+              - Name: ManualApproval
+                ActionTypeId:
+                  Category: Approval
+                  Owner: AWS
+                  Provider: Manual
+                  Version: '1'
+                RunOrder: 1
+                Configuration:
+                  NotificationArn:
+                    Fn::If:
+                      - UseMDPNotificationsStack
+                      - Fn::ImportValue: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+                      - !Ref "AWS::NoValue"
+                  CustomData: Please review the change set of all the desired stacks and set appropriate mdp secrets values(if applicable) before approving for further stage execution,
+          - !Ref "AWS::NoValue"
+        - !If
+          - DeployProdEnv
+          - Name: Prod
+            Actions:
+              - !If
+                - MDPSecretsStackNamePresent
+                - Name: BuildMdpSecretsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpSecretsStackName
+                    ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/${BusinessUnit}/mdp-secrets-prod-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MdpSecretsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPUtilsStackNamePresent
+                - Name: BuildMDPUtilsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPUtilsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/${BusinessUnit}/mdp-utils-prod-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MDPUtilsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPNotificationsStackNamePresent
+                - Name: BuildMDPNotificationsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPNotificationsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/${BusinessUnit}/mdp-notifications-prod-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: MDPNotificationsChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirbyteStackNamePresent
+                - Name: BuildAirbyteChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirbyteApplicationStackName 
+                    ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/${BusinessUnit}/airbyte-application-prod-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirbyteChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirflowStackNamePresent
+                - Name: BuildAirflowChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirflowApplicationStackName
+                    ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/${BusinessUnit}/airflow-application-prod-parameters.json'
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirflowChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: TestAndUploadLambdas
+                  ActionTypeId:
+                    Category: Build
+                    Owner: AWS
+                    Provider: CodeBuild
+                    Version: '1'
+                  Configuration:
+                    ProjectName: !Ref LambdasTestCodeBuildServer
+                  RunOrder: 1
+                  InputArtifacts:
+                    - Name: SourceCodeRepository
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: BuildLambdasChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpLambdasStackName
+                    ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_REPLACE
+                    RoleArn: !GetAtt CodePipelineRole.Arn
+                    Capabilities: CAPABILITY_NAMED_IAM
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambda-deploy-stack.yml'
+                    TemplateConfiguration: !Sub 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/${BusinessUnit}/lambdas-deploy-prod-parameters.json'
+                  RunOrder: 2
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                  Namespace: AirflowChangeSetBuildVariables
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPSecretsStackNamePresent
+                - Name: ApplyMdpSecretsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpSecretsStackName
+                    ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
+                  RunOrder: 3
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPUtilsStackNamePresent
+                - Name: ApplyMDPUtilsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPUtilsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
+                  RunOrder: 3
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPNotificationsStackNamePresent
+                - Name: ApplyMDPNotificationsChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MDPNotificationsStackName
+                    ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
+                  RunOrder: 4
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirbyteStackNamePresent
+                - Name: ApplyAirbyteChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirbyteApplicationStackName
+                    ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
+                  RunOrder: 5
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - AirflowStackNamePresent
+                - Name: ApplyAirflowChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref AirflowApplicationStackName
+                    ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
+                  RunOrder: 5
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: ApplyLambdasChangeSet
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: CloudFormation
+                    Version: '1'
+                  Configuration:
+                    StackName: !Ref MdpLambdasStackName
+                    ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
+                    ActionMode: CHANGE_SET_EXECUTE
+                    TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambdas-deploy-stack.yml'
+                  RunOrder: 6
+                  InputArtifacts:
+                    - Name: SourceCodeRepositoryDefault
+                - !Ref "AWS::NoValue"
+              - !If
+                - MDPLambdasStackNamePresent
+                - Name: UpdateLambdas
+                  ActionTypeId:
+                    Category: Build
+                    Owner: AWS
+                    Provider: CodeBuild
+                    Version: '1'
+                  Configuration:
+                    ProjectName: !Ref LambdasDeployCodeBuildServer
+                  RunOrder: 7
+                  InputArtifacts:
+                    - Name: SourceCodeRepository
+                - !Ref "AWS::NoValue"
+          - !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  LambdasTestCodeBuildServer:
+    Type: AWS::CodeBuild::Project
+    Condition: MDPLambdasStackNamePresent
+    Description: Project resource for lambdas test and upload stage
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: "aws/codebuild/standard:6.0"
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: MDP_BUCKET
+            Type: PLAINTEXT
+            Value: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+          - Name: LAMBDA_CODE_S3_PATH
+            Type: PLAINTEXT
+            Value: !Ref LambdaCodeS3Path
+          - Name: LAMBDA_LAYER_S3_PATH
+            Type: PLAINTEXT
+            Value: !Ref LayerS3Path
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub "build_specs/lambdas/test-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  LambdasDeployCodeBuildServer:
+    Type: AWS::CodeBuild::Project
+    Condition: MDPLambdasStackNamePresent
+    Description: Project resource for lambdas deploy stage
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: "aws/codebuild/standard:6.0"
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: MDP_BUCKET
+            Type: PLAINTEXT
+            Value: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+          - Name: LAMBDA_CODE_S3_PATH
+            Type: PLAINTEXT
+            Value: !Ref LambdaCodeS3Path          
+          - Name: LAYER_S3_PATH
+            Type: PLAINTEXT
+            Value: !Ref LayerS3Path
+          - Name: LAMBDA_STACK_NAME
+            Type: PLAINTEXT
+            Value: !Ref MdpLambdasStackName
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub "build_specs/lambdas/deploy-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit

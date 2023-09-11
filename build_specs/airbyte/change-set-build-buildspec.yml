@@ -1,0 +1,27 @@
+version: 0.2
+
+env:
+  exported-variables:
+      - AIRBYTE_APPLICATION_STACK_NAME
+      - AIRBYTE_CHANGE_SET_NAME
+      - REGION
+      - ENVIRONMENT
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+  build:
+    commands:
+      - business_unit=${BUSINESS_UNIT}
+      - project_name=""
+      - |
+        if [ $business_unit = "chase" ]; then
+          project_name="chase"
+        fi
+      - |
+        if [ $business_unit = "re" ]; then
+          project_name="vast_re"
+        fi 
+      - echo "Creating ${AIRBYTE_APPLICATION_STACK_NAME} change set"
+      - python scripts/utils/stack_deploy.py --region $REGION --template-path cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml --stack-name ${AIRBYTE_APPLICATION_STACK_NAME} --s3-bucket ${MDP_BUCKET} --s3-key ${TEMPLATE_S3_PATH} --change-set-name ${AIRBYTE_CHANGE_SET_NAME} --parameters cloudformation/resource_stacks/airbyte/$project_name/airbyte-application-${ENVIRONMENT}-parameters.json --no-execute-changeset
+      - echo "CHANGESET BUILD COMPLETED"

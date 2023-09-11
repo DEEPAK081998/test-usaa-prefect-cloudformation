@@ -1,0 +1,11 @@
+{
+  "Parameters" : {
+    "Name":"mdp-utils",
+    "Owner":"dbansal@homestoryrewards.com",
+    "Project":"managed-data-pipeline",
+    "Environment":"sandbox",
+    "BusinessUnit":"chase",
+    "PartnerEmailS3BucketName": "mdp-utils-sandbox-chase-partner-email-bucket-dev",
+    "MdpS3BucketName": "mdp-sandbox-chase-bucket-dev"
+  }
+}

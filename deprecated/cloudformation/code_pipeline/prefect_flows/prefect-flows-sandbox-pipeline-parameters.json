@@ -1,0 +1,58 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "prefect-flows-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "sandbox"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "8d9991ef-2ded-4368-b075-9484fa74fe01"
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/prefect-flows"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "develop"
+  },
+  {
+    "ParameterKey": "PrefectStackName",
+    "ParameterValue": "prefect-sandbox-stack"
+  },
+  {
+    "ParameterKey": "ScriptExtraArgs",
+    "ParameterValue": "--flow-name-suffix _sandbox --ecs-image \"429533234373.dkr.ecr.us-east-1.amazonaws.com/custom-prefect-0.15.13-python3.7:latest\""
+  },
+  {
+    "ParameterKey": "PrefectBaseImageUri",
+    "ParameterValue": "429533234373.dkr.ecr.us-east-1.amazonaws.com/prefect-base:0.15.13-python3.7"
+  },
+  {
+    "ParameterKey": "DockerImageName",
+    "ParameterValue": "vrathore-test"
+  },
+  {
+    "ParameterKey": "MDPSecretsStackName",
+    "ParameterValue": "mdp-secrets-sandbox-stack"
+  },
+  {
+    "ParameterKey": "AirflowStackName",
+    "ParameterValue": "airflow-sandbox-stack"
+  }
+]

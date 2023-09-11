@@ -1,0 +1,17 @@
+version: 0.2
+
+env:
+  exported-variables:
+      - PREFECT_APPLICATION_STACK_NAME
+      - PREFECT_CHANGE_SET_NAME
+      - REGION
+      - ENVIRONMENT
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+  build:
+    commands:
+      - echo "Creating ${PREFECT_APPLICATION_STACK_NAME} change set"
+      - python scripts/utils/stack_deploy.py --region $REGION --template-body cloudformation/prefect/prefect-application-stack.yml --stack-name ${PREFECT_APPLICATION_STACK_NAME} --change-set-name ${PREFECT_CHANGE_SET_NAME} --parameters cloudformation/prefect/prefect-application-${ENVIRONMENT}-parameters.json --no-execute-changeset
+      - echo "CHANGESET BUILD COMPLETED"

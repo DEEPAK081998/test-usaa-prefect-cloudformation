@@ -1,0 +1,7 @@
+networkConfiguration:
+    awsvpcConfiguration:
+      assignPublicIp: ENABLED
+      subnets:
+        - subnet-a3b29de8
+        - subnet-1ee5dd31
+        - subnet-7f610822

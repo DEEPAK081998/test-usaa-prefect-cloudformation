@@ -1,0 +1,25 @@
+{
+  "Parameters" : {
+    "Name": "airbyte-infra",
+    "Owner": "bwalker@homestoryrewards.com",
+    "Project": "airbyte-pipeline",
+    "Environment": "prod",
+    "BusinessUnit": "chase",
+    "VpcId": "",
+    "EC2Subnet": "",
+    "SSHKey": "",
+    "LoadBalancerSubnet": "",
+    "ACMCertificate": "",
+    "HostedZoneName": "",
+    "HostedZoneId": "",
+    "EC2InstanceType": "",
+    "RDSInstanceBackupRetentionPeriod": "7",
+    "AirbyteRDSSnapshotIdentifier": "",
+    "AirbyteDWSnapshotIdentifier": "",
+    "AirbyteDWAllocatedStorage": "80",
+    "AirbyteDWInstanceClass": "db.t3.large",
+    "PostmarkWebhooksAPIResourcePath": "webhook",
+    "PostmarkWebhooksAPIStageName": "sandbox",
+    "AirbyteDWMaxAllocatedStorage": "104"
+  }
+}

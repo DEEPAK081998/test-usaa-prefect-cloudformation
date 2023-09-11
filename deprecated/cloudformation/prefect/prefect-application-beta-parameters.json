@@ -1,0 +1,50 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "prefect-infra"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "prefect-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "beta"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "<VPC Id>"
+  },
+  {
+    "ParameterKey": "VPCPrivateServiceSubnetList",
+    "ParameterValue": "<Subnet lists>"
+  },
+  {
+    "ParameterKey": "EcsClusterName",
+    "ParameterValue": "prefect-beta-cluster"
+  },
+  {
+    "ParameterKey": "EcsLogGroupName",
+    "ParameterValue": "prefect-beta-logging"
+  },
+  {
+    "ParameterKey": "EcsServiceName",
+    "ParameterValue": "prefect-beta-service"
+  },
+  {
+    "ParameterKey": "PrefectS3BucketName",
+    "ParameterValue": "<Bucket-name>"
+  },
+  {
+    "ParameterKey": "MDPSecretsStackName",
+    "ParameterValue": "mdp-secrets-beta-stack"
+  }
+]

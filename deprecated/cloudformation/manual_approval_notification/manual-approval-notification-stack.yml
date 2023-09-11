@@ -1,0 +1,357 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Cloudformation stack for manual approval notification setup
+
+Parameters:
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  APIResourcePath:
+    Type: String
+    Description: Resource path name of the API to post webhooks data
+  S3Bucket:
+    Type: String
+    Description: S3 bucket name where application resources are deployed
+  LambdaS3Key:
+    Type: String
+    Description: S3 key where lambdas is deployed
+  CreateApprovalTicketLambdaZipName:
+    Type: String
+    Description: Zip file name of create approval ticket lambda
+  UpdateCodepipelineStatusLambdaZipName:
+    Type: String
+    Description: Zip file name of update codepipeline status lambda
+  LambdaLayerZipName:
+    Type: String
+    Description: Zip file name of lambda layer
+  JiraDomainName:
+    Type: String
+    Description: Jira domain name
+  ManualApprovalProjectKey:
+    Type: String
+    Description: Project key where manual approval tickets will be logged
+  ManualApprovalIssueType:
+    Type: String
+    Description: Issue type of the manual approval tickets
+  ManualApprovalAssigneeId:
+    Type: String
+    Description: Id of the manual approval tickets assignee
+  ManualApprovalProjectRole:
+    Type: String
+    Description: Manual approval project role
+
+Resources:
+  MDPCodepipelineApprovalTopic:
+    Type: AWS::SNS::Topic
+    Description: SNS topic resource to which manual approval events are published
+    Properties:
+      DisplayName: !Sub '${Environment}-manual-approval-topic'
+      TopicName: !Sub '${Environment}-manual-approval-topic'
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !GetAtt CreateApprovalTicketLambda.Arn
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  EventTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Description: Policy to allow codestar notifications to publish to sns
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codestar-notifications.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: '*'
+      Topics:
+        - !Ref MDPCodepipelineApprovalTopic
+
+  CreateApprovalTicketLambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Description: Permission for SNS service for invoke create approval ticket lambda
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref CreateApprovalTicketLambda
+      Principal: sns.amazonaws.com
+
+  CreateApprovalTicketLambda:
+    Type: AWS::Lambda::Function
+    Description: Lambda function that creates manual approval tickets on JIRA
+    Properties:
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Sub "${LambdaS3Key}/${CreateApprovalTicketLambdaZipName}"
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          JIRA_DOMAIN_NAME: !Ref JiraDomainName
+          JIRA_SECRETS_ARN: !Ref JiraRestAPISecret
+          MANUAL_APPROVAL_PROJECT_KEY: !Ref ManualApprovalProjectKey
+          MANUAL_APPROVAL_ISSUE_TYPE: !Ref ManualApprovalIssueType
+          MANUAL_APPROVAL_ASSIGNEE_ID: !Ref ManualApprovalAssigneeId
+      Layers:
+        - !Ref LambdaAwsPackageLayer
+      Handler: lambda_handler.lambda_handler
+      FunctionName: !Sub "${Environment}-create-approval-ticket-lambda"
+      Role: !GetAtt CreateApprovalTicketLambdaIAMRole.Arn
+      Runtime: python3.7
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CreateApprovalTicketLambdaIAMRole:
+    Type: 'AWS::IAM::Role'
+    Description: IAM role for create approval ticket lambda
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub '${Environment}-create-approval-ticket-lambda-policy'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetResourcePolicy
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:ListSecretVersionIds
+                Resource:
+                  - !Ref JiraRestAPISecret
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  ApiGatewayRestApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Description: Rest Api resource for API Gateway
+    Properties:
+      Name: !Sub '${Environment}-manual-approval-rest-api'
+      Description: An API Gateway with a Lambda Integration
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  APIGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Description: API Gateway method description
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref APIGatewayResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+      Integration:
+        Type: AWS
+        IntegrationResponses:
+          - StatusCode: 200
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - >-
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFuncNameArn}/invocations
+          - LambdaFuncNameArn: !GetAtt UpdateCodepipelineLambda.Arn
+
+  APIGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Description: API Gateway Resource
+    Properties:
+      RestApiId: !Ref 'ApiGatewayRestApi'
+      ParentId: !GetAtt 'ApiGatewayRestApi.RootResourceId'
+      PathPart: !Ref 'APIResourcePath'
+
+  APIGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    Description: Deployment resouce for API Gateway
+    DependsOn: APIGatewayMethod
+    Properties:
+      Description: API Gateway Deployment
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayDevelopment:
+    Type: AWS::ApiGateway::Stage
+    Description: Stage for APIGateway
+    Properties:
+      DeploymentId: !Ref APIGatewayDeployment
+      Description: Stage for APIGateway
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: !Ref Environment
+      MethodSettings:
+        - MetricsEnabled: True
+          LoggingLevel: INFO
+          HttpMethod: '*'
+          ResourcePath: '/*'
+          DataTraceEnabled: True
+      TracingEnabled: true
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  APIGatewayPermission:
+    Type: 'AWS::Lambda::Permission'
+    Description: Permission for API Gateway to invoke lambda
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt UpdateCodepipelineLambda.Arn
+      Principal: apigateway.amazonaws.com
+
+  UpdateCodepipelineLambda:
+    Type: AWS::Lambda::Function
+    Description: Lambda function that updates codepipeline status from JIRA webhook response
+    Properties:
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Sub "${LambdaS3Key}/${UpdateCodepipelineStatusLambdaZipName}"
+      Environment:
+        Variables:
+          MANUAL_APPROVAL_PROJECT_ROLE: !Ref ManualApprovalProjectRole
+          MANUAL_APPROVAL_PROJECT_KEY: !Ref ManualApprovalProjectKey
+          JIRA_SECRETS_ARN: !Ref JiraRestAPISecret
+          JIRA_DOMAIN_NAME: !Ref JiraDomainName
+      Layers:
+        - !Ref LambdaAwsPackageLayer
+      Handler: lambda_handler.lambda_handler
+      FunctionName: !Sub "${Environment}-update-codepipeline-status-lambda"
+      Role: !GetAtt UpdateCodepipelineLambdaIAMRole.Arn
+      Runtime: python3.7
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  UpdateCodepipelineLambdaIAMRole:
+    Type: 'AWS::IAM::Role'
+    Description: IAM role for update codepipeline lambda function
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub '${Environment}-update-codepipeline-status-lambda-policy'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:GetPipeline
+                  - codepipeline:GetPipelineState
+                  - codepipeline:GetPipelineExecution
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutApprovalResult
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetResourcePolicy
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:ListSecretVersionIds
+                Resource:
+                  - !Ref JiraRestAPISecret
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  JiraRestAPISecret:
+    Type: AWS::SecretsManager::Secret
+    Description: Jira creds secrets manager
+    Properties:
+      Description: Jira credentials for rest API access in lambda
+      SecretString: '{"username": "", "token": ""}'
+      Name: !Sub "${Environment}-manual-approval-jira-creds"
+
+  LambdaAwsPackageLayer:
+    Type: AWS::Lambda::LayerVersion
+    Description: Layer to store extra python packages required by lambda function
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+      Content:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Sub "${LambdaS3Key}/${LambdaLayerZipName}"
+      Description: Adds the additional packages for lambda function to work
+      LayerName: !Sub "${Environment}-manual-approval-lambda-layer"
+
+Outputs:
+  MDPCodepipelineApprovalTopicArn:
+    Description: Arn of the SNS topic that listens to codepipeline events
+    Value: !Ref MDPCodepipelineApprovalTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-mdp-topic-arn'

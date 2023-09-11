@@ -1,0 +1,102 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "workflow-resources-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "beta"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "ca6da7d5-1cc8-434c-82fc-b2e6a2d88c6c"
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/prefect-flows"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "develop"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-b87f60c0"
+  },
+  {
+    "ParameterKey": "CodeBuildSubnets",
+    "ParameterValue": "subnet-a5f2868a"
+  },
+  {
+    "ParameterKey": "S3ArtifactBucket",
+    "ParameterValue": "mdp-beta-bucket"
+  },
+  {
+    "ParameterKey": "AirbyteStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MDPSecretsStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "AirflowStackName",
+    "ParameterValue": "airflow-beta-stack"
+  },
+  {
+    "ParameterKey": "AirbyteScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "AirflowScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "DbtScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "GreatExpectationsScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "QuicksightScriptExtraArgs",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MDPNotificationsStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "OctaviaStateFilePath",
+    "ParameterValue": "airbyte/connectors/state/connector_states.zip"
+  },
+  {
+    "ParameterKey": "MDPUtilsStackName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "DeployAirflowDags",
+    "ParameterValue": "yes"
+  },
+  {
+    "ParameterKey": "DeployDBTProjects",
+    "ParameterValue": "no"
+  },
+  {
+    "ParameterKey": "DeployQuicksightDatasets",
+    "ParameterValue": "no"
+  }
+]

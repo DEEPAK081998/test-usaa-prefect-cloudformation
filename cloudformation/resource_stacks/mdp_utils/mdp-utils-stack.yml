@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Cloudformation template for setting up of mdp utils stack
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  PartnerEmailS3BucketName:
+    Description: Name of the Partner email S3 Bucket
+    Type: String
+  MdpS3BucketName:
+    Description: S3 bucket name
+    Type: String
+
+Conditions:
+  IsSandboxEnv: !Equals [!Ref Environment, "sandbox"]
+
+Resources:
+  MdpCustomIamUser:
+    Type: AWS::IAM::User
+    Description: MDP custom user resource
+    Condition: IsSandboxEnv
+    Properties:
+      UserName: !Sub mdp-custom-${Environment}-user
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  MdpCustomIamUserPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow custom user access to resources
+    Condition: IsSandboxEnv
+    Properties:
+      PolicyName: MdpCustomIamUserPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - s3:*
+          Resource:
+            - !Sub "arn:aws:s3:::mdp-${Environment}-bucket"
+            - !Sub "arn:aws:s3:::mdp-${Environment}-bucket/*"
+        - Effect: Allow
+          Action:
+            - sqs:*
+          Resource: !Sub "arn:aws:sqs:${AWS::Region}:*:mdp-*"
+      Users:
+        - !Ref MdpCustomIamUser
+
+  MdpCustomIamUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Description: Custom user access key resource
+    Condition: IsSandboxEnv
+    Properties:
+      UserName:
+        !Ref MdpCustomIamUser
+
+  MdpCustomIamUserSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: IsSandboxEnv
+    Properties:
+      Name: !Sub mdp-custom-${Environment}-user-secret
+      Description: Secret Manager resource to store access credentials for custom mdp user
+      SecretString: !Sub
+        - '{"AccessKeyId":"${AccessKeyId}","SecretAccessKey":"${SecretAccessKey}"}'
+        - AccessKeyId: !Ref MdpCustomIamUserAccessKey
+          SecretAccessKey: !GetAtt MdpCustomIamUserAccessKey.SecretAccessKey
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  DBTDockerRepository:
+    Type: AWS::ECR::Repository
+    Description: Docker repository for dbt image
+    Properties:
+      RepositoryName: !Sub "${Name}-${Environment}-dbt-ecr"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PartnerEmailS3Bucket:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket to store email data to be delivered to partners
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Sub "${PartnerEmailS3BucketName}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  MdpS3Bucket:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket to store airflow config and other usages
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Ref MdpS3BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  MdpCustomIamUserSecretArnParameter:
+    Type: AWS::SSM::Parameter
+    Condition: IsSandboxEnv
+    Properties:
+      Description: ARN of the secret manager that holds mdp custom user's access creds
+      Name: !Sub "${BusinessUnit}-${Environment}-mdp-custom-iam-user-secret-arn"
+      Type: String
+      Value: !Ref MdpCustomIamUserSecret
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  DBTDockerRepositoryNameParameter:
+    Type: AWS::SSM::Parameter
+    Condition: IsSandboxEnv
+    Properties:
+      Description: Name of the ecr repo for dbt docker image
+      Name: !Sub "${BusinessUnit}-${Environment}-dbt-docker-repository-name"
+      Type: String
+      Value: !Ref DBTDockerRepository
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+  
+  PartnerEmailS3BucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: S3 Bucket name to store email data to be delivered to partners
+      Name: !Sub "${BusinessUnit}-${Environment}-partner-email-s3-bucket-name"
+      Type: String
+      Value: !Ref PartnerEmailS3Bucket
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+  
+  S3BucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: S3 Bucket name for mdp related work
+      Name: !Sub "${BusinessUnit}-${Environment}-s3-bucket-name"
+      Type: String
+      Value: !Ref PartnerEmailS3Bucket
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit

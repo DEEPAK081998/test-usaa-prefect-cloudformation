@@ -1,0 +1,58 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "prefect-flows-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "beta"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "<codestar-connection id>"
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/prefect-flows"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "develop"
+  },
+  {
+    "ParameterKey": "PrefectStackName",
+    "ParameterValue": "prefect-beta-stack"
+  },
+  {
+    "ParameterKey": "ScriptExtraArgs",
+    "ParameterValue": "--flow-name-suffix _beta --ecs-image <ECS Image>"
+  },
+  {
+    "ParameterKey": "PrefectBaseImageUri",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "DockerImageName",
+    "ParameterValue": "custom-prefect-0.15.13-python3.7"
+  },
+  {
+    "ParameterKey": "MDPSecretsStackName",
+    "ParameterValue": "mdp-secrets-beta-stack"
+  },
+  {
+    "ParameterKey": "AirflowStackName",
+    "ParameterValue": "airflow-beta-stack"
+  }
+]

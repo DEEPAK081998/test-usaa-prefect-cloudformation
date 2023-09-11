@@ -1,0 +1,14 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+  build:
+    commands:
+      - echo "Applying ${AIRBYTE_APPLICATION_STACK_NAME} change set"
+      - python scripts/utils/stack_deploy.py --region $REGION --change-set-name ${AIRBYTE_CHANGE_SET_NAME} --stack-name ${AIRBYTE_APPLICATION_STACK_NAME} --only-execute-changeset
+      - echo "CHANGESET APPLY COMPLETED"
+  post_build:
+    commands:
+      -  python scripts/utils/update_resources.py --airbyte-stack-name ${AIRBYTE_APPLICATION_STACK_NAME} --airbyte-policy-path ${AIRBYTE_APPLICATION_STACK_POLICY_PATH}

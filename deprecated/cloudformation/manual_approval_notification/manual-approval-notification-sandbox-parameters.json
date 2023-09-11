@@ -1,0 +1,62 @@
+[
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "sandbox"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "APIResourcePath",
+    "ParameterValue": "webhooks"
+  },
+  {
+    "ParameterKey": "S3Bucket",
+    "ParameterValue": "vrathore-test-sandbox-bucket"
+  },
+  {
+    "ParameterKey": "LambdaS3Key",
+    "ParameterValue": "lambda-functions"
+  },
+  {
+    "ParameterKey": "CreateApprovalTicketLambdaZipName",
+    "ParameterValue": "create-approval-ticket.zip"
+  },
+  {
+    "ParameterKey": "UpdateCodepipelineStatusLambdaZipName",
+    "ParameterValue": "update-codepipeline-status.zip"
+  },
+  {
+    "ParameterKey": "LambdaLayerZipName",
+    "ParameterValue": "mdp-lambda-requirements.zip"
+  },
+  {
+    "ParameterKey": "JiraDomainName",
+    "ParameterValue": "homestory.atlassian.net"
+  },
+  {
+    "ParameterKey": "ManualApprovalProjectKey",
+    "ParameterValue": "PCR"
+  },
+  {
+    "ParameterKey": "ManualApprovalIssueType",
+    "ParameterValue": "Task"
+  },
+  {
+    "ParameterKey": "ManualApprovalAssigneeId",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "ManualApprovalProjectRole",
+    "ParameterValue": "release-approvers"
+  }
+]

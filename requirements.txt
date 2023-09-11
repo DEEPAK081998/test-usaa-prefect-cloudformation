@@ -1,0 +1,4 @@
+paramiko==2.11.0
+cryptography==37.0.4
+GitPython==3.1.31
+cfn_tools==0.1.6

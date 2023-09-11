@@ -1,0 +1,26 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+  pre_build:
+    commands:
+      - pip install -r test/lambdas/requirements.txt
+  build:
+    commands:
+      - echo "Testing lambda functions";
+      - |
+        for dir in ${CODEBUILD_SRC_DIR}/test/lambdas/*; do
+          base_dir=$(basename $dir);
+          if [ -f "lambdas/$base_dir/requirements.txt" ]; then
+              pip install -r "lambdas/$base_dir/requirements.txt"
+          fi
+          coverage run -m pytest test/lambdas/$base_dir;
+          status=$?;
+          [ $status -ne 0 ] && [ $status -ne 5 ] && exit $status;
+          coverage report -m;
+        done
+      - echo "Uploading lambda function code";
+      - /bin/bash scripts/manage_lambda.sh
+

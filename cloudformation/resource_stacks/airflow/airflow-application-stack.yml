@@ -1,0 +1,651 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Cloudformation template for setting up of Airflow Environment
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  VpcId:
+    Description: VPC to use
+    Type: AWS::SSM::Parameter::Value<String>
+  AirflowSubnets:
+    Description: The subnet id in which to launch airflow environment into
+    Type: AWS::SSM::Parameter::Value<List<String>>
+  DagProcessingLogs:
+    Description: Log level for DagProcessing
+    Type: String
+    Default: INFO
+  SchedulerLogsLevel:
+    Description: Log level for SchedulerLogs
+    Type: String
+    Default: INFO
+  TaskLogsLevel:
+    Description: Log level for TaskLogs
+    Type: String
+    Default: INFO
+  WorkerLogsLevel:
+    Description: Log level for WorkerLogs
+    Type: String
+    Default: INFO
+  WebserverLogsLevel:
+    Description: Log level for WebserverLogs
+    Type: String
+    Default: INFO
+  DagsS3Path:
+    Description: The relative S3 path of the folder containing dag files
+    Type: String
+  AirflowExtrasS3Path:
+    Description: The base S3 path where plugins zip file and requirements file will get stored
+    Type: String
+  UseAirbyteStack:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+    Description: Indicates whether or not to use airbyte stack
+
+Conditions:
+  UseAirflowExtrasS3Path: !Not [ !Equals [ !Ref AirflowExtrasS3Path, "" ] ]
+  IsBetaEnv: !Equals [ !Ref Environment, "beta" ]
+  IsSandboxEnv: !Equals [ !Ref Environment, "sandbox" ]
+  UseAirbyteStack: !Equals [ !Ref UseAirbyteStack, "yes" ]
+
+Resources:
+  AirflowSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: The security policies required by Airflow for proper working
+    Properties:
+      GroupDescription: Group for airflow security permission
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: "10.0.0.0/8"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  EC2SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: UseAirbyteStack
+    Properties:
+      Description: Allows airbyte EC2 instance access from airflow server
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref AirflowSecurityGroup
+      GroupId:
+        !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-ec2-security-group-id}}"
+
+  AirflowPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy for allowed actions on airflow resource
+    Properties:
+      PolicyName: AirflowResourcePolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: airflow:PublishMetrics
+            Resource:
+              - !Sub "arn:aws:airflow:${AWS::Region}:${AWS::AccountId}:environment/${Name}-${Environment}-airflow"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  S3Policy:
+    Type: AWS::IAM::Policy
+    Description: Policy for allowed actions on s3 bucket
+    Properties:
+      PolicyName: !Sub "${Name}-${Environment}-AirflowS3Policy"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Deny
+            Action: s3:ListAllMyBuckets
+            Resource:
+              - Fn::Sub:
+                  - "arn:aws:s3:::${S3BucketName}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+              - Fn::Sub:
+                  - "arn:aws:s3:::${S3BucketName}/*"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+          - Effect: Allow
+            Action:
+              - "s3:GetObject*"
+              - "s3:GetBucket*"
+              - "s3:PutObject"
+              - "s3:List*"
+              - "s3:DeleteObject"
+              - "s3:PutObjectAcl"
+              - "s3:AbortMultipartUpload"
+              - "s3:GetBucketLocation"
+            Resource:
+              - Fn::Sub:
+                  - "arn:aws:s3:::${S3BucketName}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+              - Fn::Sub:
+                  - "arn:aws:s3:::${S3BucketName}/*"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+              - Fn::Sub:
+                  - "arn:aws:s3:::${PartnerEmailS3BucketName}"
+                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-partner-email-s3-bucket-name}}"
+
+              - Fn::Sub:
+                  - "arn:aws:s3:::${PartnerEmailS3BucketName}/*"
+                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-partner-email-s3-bucket-name}}"
+
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+        - !Ref AirflowECSTaskExecutionRole
+        - !Ref AirflowECSTaskRole
+
+  EMRPolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsBetaEnv
+    Description: Policy for allowed actions on EMR
+    Properties:
+      PolicyName: AirflowEMRPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - elasticmapreduce:DescribeStep
+              - elasticmapreduce:AddJobFlowSteps
+              - elasticmapreduce:RunJobFlow
+            Resource: "*"
+          - Effect: Allow
+            Action: iam:PassRole
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:role/EMR_DemoRole"
+              - !Sub "arn:aws:iam::${AWS::AccountId}:role/EMR_EC2_DemoRole"
+              - !Sub "arn:aws:iam::${AWS::AccountId}:role/EMR_EC2_DefaultRole"
+              - !Sub "arn:aws:iam::${AWS::AccountId}:role/EMR_DefaultRole"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  LogsPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy for allowed actions on logs
+    Properties:
+      PolicyName: AirflowLogsPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:DescribeLogGroups
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:CreateLogGroup
+              - logs:PutLogEvents
+              - logs:GetLogEvents
+              - logs:GetLogRecord
+              - logs:GetLogGroupFields
+              - logs:GetQueryResults
+              - logs:DescribeLogGroups
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:airflow-${Name}-${Environment}-airflow*"
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:mdp*"
+          - Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+        - !Ref AirflowECSTaskExecutionRole
+
+  SQSPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy for allowed actions on sqs resource
+    Properties:
+      PolicyName: AirflowSQSPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:ChangeMessageVisibility
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:GetQueueUrl
+              - sqs:ReceiveMessage
+              - sqs:SendMessage
+            Resource:
+              - !Sub "arn:aws:sqs:${AWS::Region}:*:airflow-celery-*"
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - "kms:GenerateDataKey*"
+              - kms:Encrypt
+            NotResource: !Sub "arn:aws:kms:*:${AWS::AccountId}:key/*"
+            Condition:
+              StringLike:
+                "kms:ViaService":
+                  - !Sub "sqs.${AWS::Region}.amazonaws.com"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  DynamoDbPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow reading of dynamodb data
+    Properties:
+      PolicyName: !Sub "${Name}-${Environment}-DynamoDBReadPolicy"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            "Action":
+              - "dynamodb:BatchGetItem"
+              - "dynamodb:ConditionCheckItem"
+              - "dynamodb:Scan"
+              - "dynamodb:Query"
+              - "dynamodb:DescribeTable"
+              - "dynamodb:GetItem"
+              - "dynamodb:DescribeStream"
+              - "dynamodb:GetRecords"
+              - "dynamodb:GetShardIterator"
+              - "dynamodb:ListStreams"
+            Resource:
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/mdp*/index/*"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/mdp*"
+              - !GetAtt AirflowParamsDynamoDB.Arn
+              - !GetAtt AirflowParamsDynamoDB.StreamArn
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  SecretManagerPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow read actions on Airbyte DW secondary user secret manager
+    Properties:
+      PolicyName: AirflowSecretManagerPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecretVersionIds
+            Resource:
+              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-airbyte-dw-secondary-user-secret-arn'}}"
+              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-sendgrid-api-key-secret-arn'}}"
+              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-homestory-sftp-private-key-for-penny-mac-secret-arn'}}"
+              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-postmark-token-secret-arn'}}"
+          - Effect: Allow
+            Action: secretsmanager:ListSecrets
+            Resource: "*"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  SNSPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to publish events on SNS topic
+    Properties:
+      PolicyName: !Sub "${Name}-${Environment}-AirflowSNSPolicy"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sns:Publish
+            Resource:
+              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  QuickSightPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow operations on quicksight datasets
+    Properties:
+      PolicyName: QuickSightPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - quicksight:DescribeDataSet
+              - quicksight:DescribeDataSetPermissions
+            Resource: !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dataset/*"
+          - Effect: Allow
+            Action:
+              - quicksight:DescribeIngestion
+              - quicksight:CreateIngestion
+              - quicksight:DescribeUser
+              - quicksight:DescribeDataSource
+              - quicksight:ListUsers
+            Resource:
+              - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dataset/*/ingestion/*"
+              - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:user/*"
+              - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:datasource/*"
+          - Effect: Allow
+            Action:
+              - quicksight:ListDataSources
+              - quicksight:ListDataSets
+              - quicksight:ListIngestions
+            Resource: "*"
+      Roles:
+        - !Ref AirflowExecutionExecutionRole
+
+  AirflowECRPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow actions on ECR repo by airflow services
+    Properties:
+      PolicyName: AirflowECRPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ecr:GetAuthorizationToken"
+            Resource: "*"
+          - Effect: "Allow"
+            Action:
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+            Resource:
+              - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/mdp*"
+      Roles:
+        - !Ref AirflowECSTaskExecutionRole
+
+  AirflowECSPolicy:
+    Type: AWS::IAM::Policy
+    Description: Policy to allow actions on ECS by airflow services
+    Properties:
+      PolicyName: AirflowECSPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ecs:RunTask"
+              - "ecs:DescribeTasks"
+            Resource: "*"
+      Roles:
+        - !Ref AirflowECSTaskExecutionRole
+
+  AirflowExecutionExecutionRole:
+    Type: AWS::IAM::Role
+    Description: Role required for airflow environment for proper execution
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "airflow.amazonaws.com"
+                - "airflow-env.amazonaws.com"
+              AWS: !If
+                - IsSandboxEnv
+                - !Sub "arn:aws:iam::${AWS::AccountId}:role/RE-Sandbox_Contractors"
+                - !Ref AWS::NoValue
+            Action:
+              - sts:AssumeRole
+      Path: "/service-role/"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirflowECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: IAM role for AWS services required during task execution
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ecs-tasks.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirflowECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: IAM role for ECS tasks to access various AWS APIs
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ecs-tasks.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirflowVer243Resource:
+    Type: AWS::MWAA::Environment
+    Description: Airflow environment
+    Properties:
+      AirflowConfigurationOptions:
+        core.dag_run_conf_overrides_params: True
+      AirflowVersion: 2.4.3
+      DagS3Path: !Ref DagsS3Path
+      RequirementsS3Path: !If [ UseAirflowExtrasS3Path, !Sub "${AirflowExtrasS3Path}/airflow_requirements_ver_243.txt", !Ref "AWS::NoValue" ]
+      PluginsS3Path: !If [ UseAirflowExtrasS3Path, !Sub "${AirflowExtrasS3Path}/airflow_dags_plugins_ver_243.zip", !Ref "AWS::NoValue" ]
+      EnvironmentClass: mw1.small
+      LoggingConfiguration:
+        DagProcessingLogs:
+          LogLevel: !Ref DagProcessingLogs
+          Enabled: true
+        SchedulerLogs:
+          LogLevel: !Ref SchedulerLogsLevel
+          Enabled: true
+        TaskLogs:
+          LogLevel: !Ref TaskLogsLevel
+          Enabled: true
+        WorkerLogs:
+          LogLevel: !Ref WorkerLogsLevel
+          Enabled: true
+        WebserverLogs:
+          LogLevel: !Ref WebserverLogsLevel
+          Enabled: true
+      ExecutionRoleArn: !GetAtt AirflowExecutionExecutionRole.Arn
+      Name: !Sub "${Name}-${Environment}-airflow-2_4_3"
+      NetworkConfiguration:
+        SecurityGroupIds:
+          - !Ref AirflowSecurityGroup
+        SubnetIds: !Ref AirflowSubnets
+      SourceBucketArn:
+        - Fn::Sub:
+          - "arn:aws:s3:::${S3BucketName}"
+          - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+      WebserverAccessMode: PRIVATE_ONLY
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Description: Cluster that will contain all the airflow services
+    Properties:
+      ClusterName: !Sub "${Name}-${Environment}-ecs-cluster"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirflowECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Description: Log group for airflow ECS services
+    Properties:
+      LogGroupName: !Sub "${Name}-${Environment}-ecs-log-group"
+      RetentionInDays: 14
+
+  DBTTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Description: Task definition for dbt task
+    Properties:
+      Cpu: 1024
+      Memory: 2048
+      ExecutionRoleArn: !GetAtt AirflowECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt AirflowECSTaskRole.Arn
+      Family: !Sub "${Name}-${Environment}-dbt-task-definition"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: !Sub "${Name}-${Environment}-dbt-task"
+          Image:
+            !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-dbt-docker-repository-name}}"
+          Essential: true
+          Command:
+            - "dbt --help"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AirflowECSLogGroup
+              awslogs-region: !Sub ${AWS::Region}
+              awslogs-stream-prefix: dbt-task
+
+  AirflowParamsDynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "dag_name"
+          AttributeType: "S"
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: "dag_name" # Partition key of dynamo db
+          KeyType: "HASH"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [ IsSandboxEnv, false, true ]
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirflowVer243ResourceNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: MWAA environment name for airflow on 2.4.
+      Name: !Sub "${BusinessUnit}-${Environment}-mwaa-ver-243-env-name"
+      Type: String
+      Value: !Ref AirflowVer243Resource
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  AirflowParamsDynamoTableArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: ARN of dynamo db that holds the config of airflow dags
+      Name: !Sub "${BusinessUnit}-${Environment}-airflow-params-dynamo-table-arn"
+      Type: String
+      Value: !Ref AirflowParamsDynamoDB.Arn
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  AirflowExecutionRoleNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Name of the airflow execution role
+      Name: !Sub "${BusinessUnit}-${Environment}-airflow-execution-role-name"
+      Type: String
+      Value: !Ref AirflowExecutionExecutionRole
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+Outputs:
+  AirflowWebURL:
+    Description: URL of the airflow environment
+    Value: !Sub "https://${AirflowVer243Resource.WebserverUrl}"
+  AirflowParamsDynamoTableName:
+    Description: Table name of dynamo db that holds the config of airflow dags
+    Value: !Ref AirflowParamsDynamoDB

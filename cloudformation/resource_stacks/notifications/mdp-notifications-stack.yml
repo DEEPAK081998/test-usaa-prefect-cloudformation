@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Cloudformation stack for manual approval notification setup
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+
+Resources:
+  DatapipelineErrorsTopic:
+    Type: AWS::SNS::Topic
+    Description: SNS topic resource to which datapipeline errors are published
+    Properties:
+      DisplayName: !Sub 'datapipeline-${Environment}-errors-topic'
+      TopicName: !Sub 'datapipeline-${Environment}-errors-topic'
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  DatapipelineErrorsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Description: Policy to allow codestar notifications to publish to sns
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Sid: CodestarPublishPolicy
+            Effect: Allow
+            Principal:
+              Service:
+                - codestar-notifications.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: '*'
+          - Sid: CloudwatchPublishPolicy
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: '*'
+      Topics:
+        - !Ref DatapipelineErrorsTopic
+
+  MDPCodepipelineApprovalTopic:
+    Type: AWS::SNS::Topic
+    Description: SNS topic resource to which codepipeline events are published
+    Properties:
+      DisplayName: !Sub '${Name}-${Environment}-manual-approval-topic'
+      TopicName: !Sub '${Name}-${Environment}-manual-approval-topic'
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  EventTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Description: Policy to allow codestar notifications to publish to sns
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codestar-notifications.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: '*'
+      Topics:
+        - !Ref MDPCodepipelineApprovalTopic
+
+  DatapipelineErrorsTopicArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Arn of the SNS topic to which datapipeline errors are published
+      Name: !Sub "${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn"
+      Type: String
+      Value: !Ref DatapipelineErrorsTopic
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  MDPCodepipelineApprovalTopicArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Arn of the SNS topic that listens to codepipeline events
+      Name: !Sub "${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn"
+      Type: String
+      Value: !Ref MDPCodepipelineApprovalTopic
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit

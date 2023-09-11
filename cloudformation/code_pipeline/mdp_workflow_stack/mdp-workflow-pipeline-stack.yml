@@ -1,0 +1,590 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: CI/CD pipeline setup for mdp workflow pipeline resources deployment
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  MDPSecretsStackName:
+    Type: String
+    Description: Name of mdp secrets cloudformation stack
+  CodeStarConnectionId:
+    Type: String
+    Description: bitbucket codestar connection id
+  FullRepositoryName:
+    Type: String
+    Description: Full name of repository which act as source for codepipeline
+  SourceBranchName:
+    Type: String
+    Description: name of the branch which act as source
+  VpcId:
+    Description: VPC to use
+    Type: AWS::EC2::VPC::Id
+  CodeBuildSubnets:
+    Description: The Subnets which Codebuild use
+    Type: List<AWS::EC2::Subnet::Id>
+  AirbyteScriptExtraArgs:
+    Description: Extra args to be added to airbyte build script
+    Type: String
+  AirflowScriptExtraArgs:
+    Description: Extra args to be added to airflow build script
+    Type: String
+  DbtScriptExtraArgs:
+    Description: Extra args to be added to DBT build script
+    Type: String
+  GreatExpectationsScriptExtraArgs:
+    Description: Extra args to be added to GreatExpectations build script
+    Type: String
+  S3ArtifactBucket:
+    Type: String
+    Description: S3 bucket name where to store codepipeline artifact
+  AirbyteStackName:
+    Type: String
+    Description: Name of Airbyte cloudformation stack
+  AirflowStackName:
+    Type: String
+    Description: Name of Airflow cloudformation stack
+  QuicksightScriptExtraArgs:
+    Description: Extra args to be added to quicksight build script
+    Type: String
+  MDPNotificationsStackName:
+    Type: String
+    Description: Name of mdp notifications cloudformation stack
+  OctaviaStateFilePath:
+    Description: S3 path where state zip file is stored
+    Type: String
+  MDPUtilsStackName:
+    Type: String
+    Description: Name of mdp utils cloudformation stack
+  RunSqlFluffChecks:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+    Description: Indicates whether or not to run SQLFLUFF linting checks on dbt project
+  DeployAirflowDags:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+    Description: Indicates whether or not to deploy airflow dags
+  DeployDBTProjects:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+    Description: Indicates whether or not to deploy dbt project
+  DeployQuicksightDatasets:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+    Description: Indicates whether or not to deploy quicksight dataset
+  DeployGreatExpectationsProjects:
+    Type: String
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "yes"
+    Description: Indicates whether or not to deploy great_expectations projects or not
+
+
+Conditions:
+  IsSandboxEnv: !Equals [ !Ref Environment, "sandbox" ]
+  AirflowStackNamePresent: !Not [ !Equals [ !Ref AirflowStackName, "" ] ]
+  MDPSecretsStackNamePresent: !Not [ !Equals [ !Ref MDPSecretsStackName, "" ] ]
+  MDPNotificationsStackNamePresent: !Not [ !Equals [ !Ref MDPNotificationsStackName, "" ] ]
+  AirbyteStackNamePresent: !Not [ !Equals [ !Ref AirbyteStackName, "" ] ]
+  MDPUtilsStackNamePresent: !Not [ !Equals [ !Ref MDPUtilsStackName, "" ] ]
+  DeployAirflowDags: !Equals [ !Ref DeployAirflowDags, "yes" ]
+  DeployDBTProjects: !Equals [ !Ref DeployDBTProjects, "yes" ]
+  DeployQuicksightDatasets: !Equals [ !Ref DeployQuicksightDatasets, "yes" ]
+  DeployGreatExpectationsProjects: !Equals [ !Ref DeployGreatExpectationsProjects, "yes" ]
+
+Resources:
+  CodepipelineStatusNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Condition: MDPNotificationsStackNamePresent
+    Properties:
+      Name: !Sub "${Name}-${Environment}-manual-approval-rule"
+      DetailType: FULL
+      Resource: !Sub
+        - arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${PipelineName}
+        - PipelineName: !Ref CodePipeline
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+        - codepipeline-pipeline-pipeline-execution-canceled
+        - codepipeline-pipeline-pipeline-execution-started
+      Targets:
+        - TargetType: SNS
+          TargetAddress:
+            Fn::ImportValue: !Sub '${MDPNotificationsStackName}--MDPCodepipelineApprovalTopicArn'
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  CodepipelineFailureNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Condition: MDPNotificationsStackNamePresent
+    Description: Notification Rule to trigger codepipeline failure notifications to SNS
+    Properties:
+      Name: !Sub "${Name}-${Environment}-pipeline-failure-rule"
+      DetailType: FULL
+      Resource: !Sub
+        - arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${PipelineName}
+        - PipelineName: !Ref CodePipeline
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+      Targets:
+        - TargetType: SNS
+          TargetAddress:
+            Fn::ImportValue: !Sub '${MDPNotificationsStackName}-DatapipelineErrorsTopicArn'
+      Tags:
+        Name: !Ref Name
+        Owner: !Ref Owner
+        Project: !Ref Project
+        Environment: !Ref Environment
+        BusinessUnit: !Ref BusinessUnit
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Sid: ''
+        Version: '2012-10-17'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSCodeStarServiceRole
+        - arn:aws:iam::aws:policy/AWSCodeStarFullAccess
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codestar-connections:UseConnection
+                Effect: Allow
+                Resource:
+                  - !Sub 'arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}'
+              - Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - s3:*
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:s3:::${S3ArtifactBucket}"
+            Version: '2012-10-17'
+          PolicyName: codepipelinepolicy
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CodeBuildSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Description: Policies required by codebuild to access Airbyte instance
+    Properties:
+      GroupName: !Sub "${Name}-${Environment}-codebuild-security-group"
+      GroupDescription: Group for airbyte-pipeline codebuild security permission
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  DBTDeployBuild:
+    Type: AWS::CodeBuild::Project
+    Condition: DeployDBTProjects
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Cache:
+        Location: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
+        Type: LOCAL
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:6.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AIRFLOW_S3_BUCKET_NAME
+            Type: PLAINTEXT
+            Value: 
+              Fn::ImportValue: !Sub '${MDPUtilsStackName}-S3BucketName'
+          - Name: ACCOUNT_ID
+            Type: PLAINTEXT
+            Value: !Ref AWS::AccountId
+          - Name: TAG
+            Type: PLAINTEXT
+            Value: "latest"
+          - Name: REGION
+            Type: PLAINTEXT
+            Value: "us-east-1"
+          - Name: ENVIRONMENT
+            Type: PLAINTEXT
+            Value: !Ref Environment
+          - Name: BUSINESS_UNIT
+            Type: PLAINTEXT
+            Value: !Ref BusinessUnit
+          - Name: DBT_SCRIPT_EXTRA_ARGS
+            Type: PLAINTEXT
+            Value: !Ref DbtScriptExtraArgs
+        PrivilegedMode: True
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "build_specs/dbt/deploy-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  GreatExpectationsDeployBuild:
+    Type: AWS::CodeBuild::Project
+    Condition: DeployGreatExpectationsProjects
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:6.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AIRFLOW_S3_BUCKET_NAME
+            Type: PLAINTEXT
+            Value: 
+              Fn::ImportValue: !Sub '${MDPUtilsStackName}-S3BucketName'
+          - Name: ENVIRONMENT
+            Type: PLAINTEXT
+            Value: !Ref Environment
+          - Name: BUSINESS_UNIT
+            Type: PLAINTEXT
+            Value: !Ref BusinessUnit
+          - Name: GX_SCRIPT_EXTRA_ARGS
+            Type: PLAINTEXT
+            Value: !Ref GreatExpectationsScriptExtraArgs
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "build_specs/great_expectations/deploy-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  AirflowDeployBuild:
+    Type: AWS::CodeBuild::Project
+    Condition: DeployAirflowDags
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Cache:
+        Location: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
+        Type: LOCAL
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:6.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AIRFLOW_S3_BUCKET_NAME
+            Type: PLAINTEXT
+            Value: 
+              Fn::ImportValue: !Sub '${MDPUtilsStackName}-S3BucketName'
+          - Name: AIRFLOW_SCRIPT_EXTRA_ARGS
+            Type: PLAINTEXT
+            Value: !Ref AirflowScriptExtraArgs
+          - Name: REGION
+            Type: PLAINTEXT
+            Value: "us-east-1"
+          - Name: ENVIRONMENT
+            Type: PLAINTEXT
+            Value: !Ref Environment
+          - Name: BUSINESS_UNIT
+            Type: PLAINTEXT
+            Value: !Ref BusinessUnit
+          - Name: MDP_UTILS_STACK_NAME
+            Type: PLAINTEXT
+            Value: 
+              !If
+                - MDPUtilsStackNamePresent
+                - !Ref MDPUtilsStackName
+                - !Ref AWS::NoValue
+          - Name: AIRFLOW_STACK_NAME
+            Type: PLAINTEXT
+            Value: !Ref AirflowStackName
+        PrivilegedMode: True
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "build_specs/airflow/deploy-buildspec.yml"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+        Subnets: !Ref CodeBuildSubnets
+        VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  DataSetsDeployBuild:
+    Type: AWS::CodeBuild::Project
+    Condition: DeployQuicksightDatasets
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:6.0'
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AIRFLOW_S3_BUCKET_NAME
+            Type: PLAINTEXT
+            Value:
+              Fn::ImportValue: !Sub '${MDPUtilsStackName}-S3BucketName'
+          - Name: ENVIRONMENT
+            Type: PLAINTEXT
+            Value: !Ref Environment
+          - Name: BUSINESS_UNIT
+            Type: PLAINTEXT
+            Value: !Ref BusinessUnit
+          - Name: QUICKSIGHT_SCRIPT_EXTRA_ARGS
+            Type: PLAINTEXT
+            Value: !Ref QuicksightScriptExtraArgs
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 60
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "build_specs/quicksight/dataset-deploy-buildspec.yml"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  EC2SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: AirbyteStackNamePresent
+    Properties:
+      Description: Allows airbyte EC2 instance access from codebuild server
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref CodeBuildSecurityGroup
+      GroupId:
+        Fn::ImportValue: !Sub '${AirbyteStackName}-EC2SecurityGroupId'
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${Name}-${Environment}-pipeline'
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Location: !Ref S3ArtifactBucket
+        Type: S3
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GetSourceCodeRepository
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Sub 'arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}'
+                BranchName: !Ref SourceBranchName
+                FullRepositoryId: !Ref FullRepositoryName
+                OutputArtifactFormat: CODEBUILD_CLONE_REF
+              OutputArtifacts:
+                - Name: SourceCodeRepository
+              Namespace: SourceVariables
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - !If
+              - DeployDBTProjects
+              - Name: DeployDBT
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref DBTDeployBuild
+                  EnvironmentVariables: !Join
+                    - ''
+                    - - '['
+                      - !Sub '{"name":"RUN_SQLFLUFF_CHECKS","value":"${RunSqlFluffChecks}","type":"PLAINTEXT"}'
+                      - ']'
+                RunOrder: 1
+                InputArtifacts:
+                  - Name: SourceCodeRepository
+              - !Ref "AWS::NoValue"
+            - !If
+              - DeployGreatExpectationsProjects
+              - Name: DeployGreatExpectations
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref GreatExpectationsDeployBuild
+                RunOrder: 1
+                InputArtifacts:
+                  - Name: SourceCodeRepository
+              - !Ref "AWS::NoValue"  
+            - !If
+              - DeployAirflowDags
+              - Name: DeployAirflowDags
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref AirflowDeployBuild
+                RunOrder: 1
+                InputArtifacts:
+                  - Name: SourceCodeRepository
+              - !Ref "AWS::NoValue"
+            - !If
+              - DeployQuicksightDatasets
+              - Name: DeployQuicksightDataSets
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: '1'
+                Configuration:
+                  ProjectName: !Ref DataSetsDeployBuild
+                RunOrder: 1
+                InputArtifacts:
+                  - Name: SourceCodeRepository
+              - !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit

@@ -1,0 +1,494 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Setup Prefect esc cluster
+
+Parameters:
+  Name:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Name describing name of the resource
+  Owner:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Owner describing who is provisioning this resource
+  Project:
+    Type: String
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: Can contain only ASCII characters.
+    Description: Project describing for which project this resource will be used
+  Environment:
+    Type: String
+    Description: Environment declaration
+  BusinessUnit:
+    Description: Business Unit
+    Type: String
+  VpcId:
+    Description: >
+      VPC to use.  Must include two availability zones each with both a private (with NAT and VPN) and public subnet
+    Type: AWS::EC2::VPC::Id
+  VPCPrivateServiceSubnetList:
+    Description: List of private service subnet IDs
+    Type: CommaDelimitedList
+  EcsClusterName:
+    Type: String
+    Description: Ecs cluster name
+  EcsLogGroupName:
+    Type: String
+    Description: Cloudwatch log group name
+  EcsServiceName:
+    Type: String
+    Description: Ecs service name which run the prefect service
+  PrefectS3BucketName:
+    Type: String
+    Description: S3 Bucket name for prefect usages
+  MDPSecretsStackName:
+    Type: String
+    Description: Name of mdp secrets cloudformation stack
+
+Resources:
+  LambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectLambdaPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: '*'
+      Roles:
+        - !Ref PrefectTaskRole
+
+  EMRPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectEMRPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - elasticmapreduce:DescribeCluster
+            Resource: '*'
+      Roles:
+        - !Ref PrefectTaskRole
+
+  DynamoDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectDynamoDBPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource: '*'
+      Roles:
+        - !Ref PrefectTaskRole
+
+  EC2Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectEC2Policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ec2:AuthorizeSecurityGroupIngress
+              - ec2:CreateSecurityGroup
+              - ec2:CreateTags
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeVpcs
+              - ec2:DeleteSecurityGroup
+            Resource: '*'
+      Roles:
+        - !Ref PrefectTaskRole
+
+  ECSPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectECSPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ecs:CreateCluster
+              - ecs:DeleteCluster
+              - ecs:DeregisterTaskDefinition
+              - ecs:DescribeClusters
+              - ecs:DescribeTaskDefinition
+              - ecs:DescribeTasks
+              - ecs:ListAccountSettings
+              - ecs:ListClusters
+              - ecs:ListTaskDefinitions
+              - ecs:RegisterTaskDefinition
+              - ecs:RunTask
+              - ecs:StopTask
+            Resource: '*'
+      Roles:
+        - !Ref PrefectTaskRole
+
+  LogsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectLogsPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogGroups
+              - logs:GetLogEvents
+            Resource: !GetAtt PrefectLogGroup.Arn
+      Roles:
+        - !Ref PrefectTaskRole
+
+  S3Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectS3Policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource: 
+              - !Sub "${PrefectS3Bucket.Arn}/*"
+              - !GetAtt PrefectS3Bucket.Arn
+      Roles:
+        - !Ref PrefectTaskRole
+        - !Ref ECSTaskExecutionRole
+
+  RolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: prefectTaskRolePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:PassRole
+            Resource:
+            - !GetAtt PrefectTaskRole.Arn
+            - !GetAtt ECSTaskExecutionRole.Arn
+      Roles:
+        - !Ref PrefectTaskRole
+
+  ECSTaskExecutionRole:
+    Description: Attach general policies to ecs task for proper execution
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "ecs-tasks.amazonaws.com"
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: prefectECSAgentTaskExecutionRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:GetResourcePolicy
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:ListSecretVersionIds
+                Resource:
+                  - Fn::ImportValue: !Sub '${MDPSecretsStackName}-PrefectAPISecretARN'
+              - Effect: Allow
+                Action: secretsmanager:ListSecrets
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PrefectTaskRole:
+    Description: >
+      permissions needed by Prefect to register/de register task definitions, and create new flow runs as ECS tasks
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "ecs-tasks.amazonaws.com"
+            Action:
+              - sts:AssumeRole
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  CPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Description: Alarm for average CPU utilization by the cluster per minute
+    Properties:
+      AlarmName: !Sub ECS-${Environment}-CPU-Utilization-alarm
+      AlarmDescription: CPU utilization alarm for ECS cluster
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: '60'
+      Threshold: '75' # In Percentage
+      EvaluationPeriods: '1'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClusterName
+        Value:
+          Ref: PrefectECSCluster
+
+  MemoryUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Description: Alarm for average memory utilization by the cluster per minute
+    Properties:
+      AlarmName: !Sub ECS-${Environment}-Memory-Utilization-alarm
+      AlarmDescription: Memory Utilization alarm for ECS cluster
+      Namespace: AWS/ECS
+      MetricName: MemoryUtilization
+      Statistic: Average
+      Period: '60'
+      Threshold: '75' # In Percentage
+      EvaluationPeriods: '1'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClusterName
+        Value:
+          Ref: PrefectECSCluster
+
+  NetworkInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Description: Alarm for average number of bytes received per minute
+    Properties:
+      AlarmName: !Sub ECS-${Environment}-Network-In-alarm
+      AlarmDescription: Network In alarm for ECS cluster
+      Namespace: ECS/ContainerInsights
+      MetricName: NetworkRxBytes
+      Statistic: Average
+      Period: '60'
+      Threshold: '1000' # In Bytes
+      EvaluationPeriods: '1'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClusterName
+        Value:
+          Ref: PrefectECSCluster
+
+  NetworkOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Description: Alarm for average number of bytes transmitted per minute
+    Properties:
+      AlarmName: !Sub ECS-${Environment}-Network-Out-alarm
+      AlarmDescription: Network Out alarm for ECS cluster
+      Namespace: ECS/ContainerInsights
+      MetricName: NetworkTxBytes
+      Statistic: Average
+      Period: '60'
+      Threshold: '1000' # In Bytes
+      EvaluationPeriods: '1'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClusterName
+        Value:
+          Ref: PrefectECSCluster
+
+  PrefectECSCluster:
+    Description: Cluster where all prefect service and task will run
+    Type: AWS::ECS::Cluster
+    Properties:
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      ClusterName: !Ref EcsClusterName
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 3
+        - Base: 1
+          CapacityProvider: FARGATE
+          Weight: 2
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PrefectLogGroup:
+    Description: Log group where ecs task send all logs
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref EcsLogGroupName
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PrefectEcsTaskdefinition:
+    Description: Task to run prefect
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref EcsServiceName
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: 512
+      Memory: 1024
+      TaskRoleArn: !GetAtt PrefectTaskRole.Arn
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: !Ref EcsServiceName
+          Image: prefecthq/prefect:0.15.13-python3.7
+          Essential: True
+          Command:
+            - prefect
+            - agent
+            - ecs
+            - start
+            - --run-task-kwargs
+            - !Sub "s3://${PrefectS3BucketName}/configs/prefect_config.yaml"
+            - --task-role-arn
+            - !GetAtt PrefectTaskRole.Arn
+            - --execution-role-arn
+            - !GetAtt ECSTaskExecutionRole.Arn
+            - --cluster
+            - !Ref EcsClusterName
+            - --launch-type
+            - FARGATE
+          Environment:
+            - Name: PREFECT__CLOUD__AGENT__LABELS
+              Value: !Sub "['${Environment}']"
+            - Name: PREFECT__CLOUD__AGENT__LEVEL
+              Value: "INFO"
+            - Name: PREFECT__CLOUD__API
+              Value: "https://api.prefect.io"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PrefectLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+              awslogs-create-group: 'true'
+          Secrets:
+            - Name: PREFECT__CLOUD__API_KEY
+              ValueFrom:
+                Fn::ImportValue: !Sub '${MDPSecretsStackName}-PrefectAPISecretARN'
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PrefectEcsService:
+    Description: Ecs service to run the prefect task definition on prefect cluster
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref EcsServiceName
+      TaskDefinition: !Ref PrefectEcsTaskdefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      Cluster: !Ref PrefectECSCluster
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref VPCPrivateServiceSubnetList
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+  PrefectS3Bucket:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket to store prefect config and other usages
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Ref PrefectS3BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
+Outputs:
+  S3BucketName:
+    Description: S3 Bucket name for prefect storage
+    Value: !Ref PrefectS3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketName"
+

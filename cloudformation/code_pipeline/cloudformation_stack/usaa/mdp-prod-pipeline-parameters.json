@@ -1,0 +1,70 @@
+[
+  {
+    "ParameterKey": "Name",
+    "ParameterValue": "mdp-pipeline"
+  },
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": "bwalker@homestoryrewards.com"
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "mdp"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "usaa"
+  },
+  {
+    "ParameterKey": "S3ArtifactBucket",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "main"
+  },
+  {
+    "ParameterKey": "AirbyteApplicationStackName",
+    "ParameterValue": "airbyte-prod-stack"
+  },
+  {
+    "ParameterKey": "MdpSecretsStackName",
+    "ParameterValue": "mdp-secrets-prod-stack"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "FullRepositoryName",
+    "ParameterValue": "homestoryre/prefect-cloudformation"
+  },
+  {
+    "ParameterKey": "AirflowApplicationStackName",
+    "ParameterValue": "airflow-prod-stack"
+  },
+  {
+    "ParameterKey": "MDPNotificationsStackName",
+    "ParameterValue": "mdp-notifications-prod-stack"
+  },
+  {
+    "ParameterKey": "LambdaCodeS3Path",
+    "ParameterValue": "lambdas/lambda-code"
+  },
+  {
+    "ParameterKey": "MDPUtilsStackName",
+    "ParameterValue": "mdp-utils-prod-stack"
+  },
+  {
+    "ParameterKey": "LayerS3Path",
+    "ParameterValue": "lambdas/lambda-layer"
+  },
+  {
+    "ParameterKey": "MdpLambdasStackName",
+    "ParameterValue": "mdp-lambdas-prod-stack"
+  }
+]

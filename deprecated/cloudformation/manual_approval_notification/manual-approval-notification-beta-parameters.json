@@ -1,0 +1,62 @@
+[
+  {
+    "ParameterKey": "Owner",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "Project",
+    "ParameterValue": "managed-data-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "beta"
+  },
+  {
+    "ParameterKey": "BusinessUnit",
+    "ParameterValue": "re"
+  },
+  {
+    "ParameterKey": "APIResourcePath",
+    "ParameterValue": "webhooks"
+  },
+  {
+    "ParameterKey": "S3Bucket",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "LambdaS3Key",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "CreateApprovalTicketLambdaZipName",
+    "ParameterValue": "create-approval-ticket.zip"
+  },
+  {
+    "ParameterKey": "UpdateCodepipelineStatusLambdaZipName",
+    "ParameterValue": "update-codepipeline-status.zip"
+  },
+  {
+    "ParameterKey": "LambdaLayerZipName",
+    "ParameterValue": "mdp-lambda-requirements.zip"
+  },
+  {
+    "ParameterKey": "JiraDomainName",
+    "ParameterValue": "homestory.atlassian.net"
+  },
+  {
+    "ParameterKey": "ManualApprovalProjectKey",
+    "ParameterValue": "PCR"
+  },
+  {
+    "ParameterKey": "ManualApprovalIssueType",
+    "ParameterValue": "Task"
+  },
+  {
+    "ParameterKey": "ManualApprovalAssigneeId",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "ManualApprovalProjectRole",
+    "ParameterValue": ""
+  }
+]
