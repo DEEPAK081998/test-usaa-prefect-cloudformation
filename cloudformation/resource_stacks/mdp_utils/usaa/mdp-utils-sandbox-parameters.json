@@ -1,11 +1,11 @@
 {
   "Parameters" : {
     "Name":"mdp-utils",
-    "Owner":"bwalker@homestoryrewards.com",
+    "Owner":"dbansal@homestoryrewards.com",
     "Project":"managed-data-pipeline",
     "Environment":"sandbox",
     "BusinessUnit":"usaa",
-    "PartnerEmailS3BucketName": "mdp-utils-sandbox-usaa-partner-email-bucket",
-    "MdpS3BucketName": "mdp-sandbox-usaa-bucket"
+    "PartnerEmailS3BucketName": "mdp-utils-sandbox-usaa-partner-email-bucket-dev",
+    "MdpS3BucketName": "mdp-sandbox-usaa-bucket-dev"
   }
 }

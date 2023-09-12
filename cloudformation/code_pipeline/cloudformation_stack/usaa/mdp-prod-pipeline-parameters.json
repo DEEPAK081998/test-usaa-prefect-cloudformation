@@ -5,7 +5,7 @@
   },
   {
     "ParameterKey": "Owner",
-    "ParameterValue": "bwalker@homestoryrewards.com"
+    "ParameterValue": "dbansal@homestoryrewards.com"
   },
   {
     "ParameterKey": "Project",
@@ -21,50 +21,66 @@
   },
   {
     "ParameterKey": "S3ArtifactBucket",
-    "ParameterValue": ""
+    "ParameterValue": "mdp-prod-usaa-bucket-dev"
   },
   {
     "ParameterKey": "SourceBranchName",
-    "ParameterValue": "main"
+    "ParameterValue": "feature/DB-USAA-456-test"
   },
   {
-    "ParameterKey": "AirbyteApplicationStackName",
-    "ParameterValue": "airbyte-prod-stack"
-  },
-  {
-    "ParameterKey": "MdpSecretsStackName",
-    "ParameterValue": "mdp-secrets-prod-stack"
-  },
-  {
-    "ParameterKey": "CodeStarConnectionId",
+    "ParameterKey": "AirbyteApplicationStackPrefix",
     "ParameterValue": ""
   },
   {
+    "ParameterKey": "MdpSecretsStackPrefix",
+    "ParameterValue": "mdp-secrets"
+  },
+  {
+    "ParameterKey": "CodeStarConnectionId",
+    "ParameterValue": "fdbe5820-bc58-4d9d-a4b8-2ab2666852ac"
+  },
+  {
     "ParameterKey": "FullRepositoryName",
-    "ParameterValue": "homestoryre/prefect-cloudformation"
+    "ParameterValue": "DEEPAK081998/test-usaa-prefect-cloudformation"
   },
   {
-    "ParameterKey": "AirflowApplicationStackName",
-    "ParameterValue": "airflow-prod-stack"
+    "ParameterKey": "AirflowApplicationStackPrefix",
+    "ParameterValue": ""
   },
   {
-    "ParameterKey": "MDPNotificationsStackName",
-    "ParameterValue": "mdp-notifications-prod-stack"
+    "ParameterKey": "MDPNotificationsStackPrefix",
+    "ParameterValue": "mdp-notifications"
   },
   {
     "ParameterKey": "LambdaCodeS3Path",
     "ParameterValue": "lambdas/lambda-code"
   },
   {
-    "ParameterKey": "MDPUtilsStackName",
-    "ParameterValue": "mdp-utils-prod-stack"
+    "ParameterKey": "MDPUtilsStackPrefix",
+    "ParameterValue": "mdp-utils-test"
   },
   {
     "ParameterKey": "LayerS3Path",
     "ParameterValue": "lambdas/lambda-layer"
   },
   {
-    "ParameterKey": "MdpLambdasStackName",
-    "ParameterValue": "mdp-lambdas-prod-stack"
+    "ParameterKey": "MdpLambdasStackPrefix",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "DeploySandboxEnv",
+    "ParameterValue": "no"
+  },
+  {
+    "ParameterKey": "DeployBetaEnv",
+    "ParameterValue": "yes"
+  },
+  {
+    "ParameterKey": "DeployProdEnv",
+    "ParameterValue": "yes"
+  },
+  {
+    "ParameterKey": "UseMDPNotificationsStack",
+    "ParameterValue": "no"
   }
 ]

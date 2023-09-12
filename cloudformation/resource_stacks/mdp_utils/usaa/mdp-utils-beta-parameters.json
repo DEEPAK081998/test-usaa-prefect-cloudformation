@@ -1,11 +1,11 @@
 {
-    "Parameters" : {
-      "Name":"mdp-utils",
-      "Owner":"bwalker@homestoryrewards.com",
-      "Project":"managed-data-pipeline",
-      "Environment":"beta",
-      "BusinessUnit":"chase",
-      "PartnerEmailS3BucketName": "mdp-utils-beta-chase-partner-email-bucket",
-      "MdpS3BucketName": "mdp-beta-chase-bucket"
-    }
+  "Parameters": {
+    "Name": "mdp-utils",
+    "Owner": "dbansal@homestoryrewards.com",
+    "Project": "managed-data-pipeline",
+    "Environment": "beta",
+    "BusinessUnit": "chase",
+    "PartnerEmailS3BucketName": "mdp-utils-beta-chase-partner-email-bucket-dev",
+    "MdpS3BucketName": "mdp-beta-chase-bucket-dev"
   }
+}
