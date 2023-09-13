@@ -228,7 +228,7 @@ Resources:
       Description: S3 Bucket name for mdp related work
       Name: !Sub "${BusinessUnit}-${Environment}-s3-bucket-name"
       Type: String
-      Value: !Ref PartnerEmailS3Bucket
+      Value: !Ref MdpS3Bucket
       Tags:
         Name: !Ref Name
         Owner: !Ref Owner

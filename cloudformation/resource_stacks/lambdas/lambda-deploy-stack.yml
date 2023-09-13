@@ -413,7 +413,7 @@ Resources:
             !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
       Runtime: python3.10
       Layers:
-        - !Ref BitlyLinksLambdaAwsPackageLayer
+        - !Ref UpdateBitlyLinksLambdaLayer
       Timeout: 300
       Role: !GetAtt BitlyLambdaProcessorRole.Arn
       # VpcConfig:
@@ -452,7 +452,7 @@ Resources:
             !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
       Runtime: python3.10
       Layers:
-        - !Ref BitlyClicksLambdaAwsPackageLayer
+        - !Ref UpdateBitlyClicksLambdaLayer
       Timeout: 300
       Role: !GetAtt BitlyLambdaProcessorRole.Arn
       # VpcConfig:
