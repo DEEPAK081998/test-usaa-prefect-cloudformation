@@ -114,33 +114,6 @@ Conditions:
   UseAirflowStack: !Equals [ !Ref UseAirflowStack, "yes" ]
   UseAirbyteStack: !Equals [ !Ref UseAirbyteStack, "yes" ]
 
-Mappings:
-  EnvironmentMap:
-    sandbox:
-      "BucketName": !Sub "{{resolve:ssm:${BusinessUnit}-sandbox-s3-bucket-name}}"
-      "MDPUtilsStackName": !Sub "${MDPUtilsStackPrefix}-sandbox-stack"
-      "MdpSecretsStackName": !Sub "${MdpSecretsStackPrefix}-sandbox-stack"
-      "MDPNotificationsStackName": !Sub "${MDPNotificationsStackPrefix}-sandbox-stack"
-      "AirbyteStackName": !Sub "${AirbyteApplicationStackPrefix}-sandbox-stack"
-      "AirflowStackName": !Sub "${AirflowApplicationStackPrefix}-sandbox-stack"
-      "MdpLambdasStackName": !Sub "${MdpLambdasStackPrefix}-sandbox-stack"
-    beta:
-      "BucketName": !Sub "{{resolve:ssm:${BusinessUnit}-beta-s3-bucket-name}}"
-      "MDPUtilsStackName": !Sub "${MDPUtilsStackPrefix}-beta-stack"
-      "MdpSecretsStackName": !Sub "${MdpSecretsStackPrefix}-beta-stack"
-      "MDPNotificationsStackName": !Sub "${MDPNotificationsStackPrefix}-beta-stack"
-      "AirbyteStackName": !Sub "${AirbyteApplicationStackPrefix}-beta-stack"
-      "AirflowStackName": !Sub "${AirflowApplicationStackPrefix}-beta-stack"
-      "MdpLambdasStackName": !Sub "${MdpLambdasStackPrefix}-beta-stack"
-    prod:
-      "BucketName": !Sub "{{resolve:ssm:${BusinessUnit}-prod-s3-bucket-name}}"
-      "MDPUtilsStackName": !Sub "${MDPUtilsStackPrefix}-prod-stack"
-      "MdpSecretsStackName": !Sub "${MdpSecretsStackPrefix}-prod-stack"
-      "MDPNotificationsStackName": !Sub "${MDPNotificationsStackPrefix}-prod-stack"
-      "AirbyteStackName": !Sub "${AirbyteApplicationStackPrefix}-prod-stack"
-      "AirflowStackName": !Sub "${AirflowApplicationStackPrefix}-prod-stack"
-      "MdpLambdasStackName": !Sub "${MdpLambdasStackPrefix}-prod-stack"
-
 Resources:
   CodepipelineStatusNotificationRule:
     Type: 'AWS::CodeStarNotifications::NotificationRule'
@@ -335,7 +308,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPSecretsStackName]
+                    StackName: !Sub "${MdpSecretsStackPrefix}-sandbox-stack"
                     ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -356,7 +329,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPUtilsStackName]
+                    StackName: !Sub "${MDPUtilsStackPrefix}-sandbox-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -377,7 +350,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPNotificationsStackName]
+                    StackName: !Sub "${MDPNotificationsStackPrefix}-sandbox-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -398,7 +371,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, AirbyteStackName] 
+                    StackName: !Sub "${AirbyteApplicationStackPrefix}-sandbox-stack"
                     ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -419,7 +392,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, AirflowStackName]
+                    StackName: !Sub "${AirflowApplicationStackPrefix}-sandbox-stack"
                     ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -447,7 +420,7 @@ Resources:
                         - Fn::Sub:
                             - '{"name":"MDP_BUCKET","value":"${MDPS3Bucket}","type":"PLAINTEXT"},'
                             - MDPS3Bucket:
-                                !FindInMap [EnvironmentMap, sandbox, BucketName]
+                                !Sub "{{resolve:ssm:${BusinessUnit}-sandbox-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
                         - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
                         - ']'
@@ -464,7 +437,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPLambdasStackName]
+                    StackName: !Sub "${MdpLambdasStackPrefix}-sandbox-stack"
                     ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -485,7 +458,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPSecretsStackName]
+                    StackName: !Sub "${MdpSecretsStackPrefix}-sandbox-stack"
                     ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
@@ -502,7 +475,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPUtilsStackName]
+                    StackName: !Sub "${MDPUtilsStackPrefix}-sandbox-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
@@ -519,7 +492,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MDPNotificationsStackName]
+                    StackName: !Sub "${MDPNotificationsStackPrefix}-sandbox-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
@@ -536,7 +509,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, AirbyteStackName]
+                    StackName: !Sub "${AirbyteApplicationStackPrefix}-sandbox-stack"
                     ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
@@ -553,7 +526,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, AirflowStackName]
+                    StackName: !Sub "${AirflowApplicationStackPrefix}-sandbox-stack"
                     ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
@@ -570,7 +543,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, sandbox, MdpLambdasStackName]
+                    StackName: !Sub "${MdpLambdasStackPrefix}-sandbox-stack"
                     ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambdas-deploy-stack.yml'
@@ -594,13 +567,13 @@ Resources:
                         - Fn::Sub:
                             - '{"name":"MDP_BUCKET","value":"${MDPS3Bucket}","type":"PLAINTEXT"},'
                             - MDPS3Bucket:
-                                !FindInMap [EnvironmentMap, sandbox, BucketName]
+                                !Sub "{{resolve:ssm:${BusinessUnit}-sandbox-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
                         - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
                         - Fn::Sub:
                             - '{"name":"LAMBDA_STACK_NAME","value":"${MdpLambdasStackName}","type":"PLAINTEXT"}'
                             - MdpLambdasStackName:
-                                !FindInMap [EnvironmentMap, sandbox, MdpLambdasStackName]
+                                !Sub "${MdpLambdasStackPrefix}-sandbox-stack"
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
@@ -620,7 +593,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MDPSecretsStackName]
+                    StackName: !Sub "${MdpSecretsStackPrefix}-beta-stack"
                     ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -641,7 +614,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MDPUtilsStackName]
+                    StackName: !Sub "${MDPUtilsStackPrefix}-beta-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -662,7 +635,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MDPNotificationsStackName]
+                    StackName: !Sub "${MDPNotificationsStackPrefix}-beta-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -683,7 +656,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, AirbyteStackName] 
+                    StackName: !Sub "${AirbyteApplicationStackPrefix}-beta-stack"
                     ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -704,7 +677,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, AirflowStackName]
+                    StackName: !Sub "${AirflowApplicationStackPrefix}-beta-stack"
                     ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -732,7 +705,7 @@ Resources:
                         - Fn::Sub:
                             - '{"name":"MDP_BUCKET","value":"${MDPS3Bucket}","type":"PLAINTEXT"},'
                             - MDPS3Bucket:
-                                !FindInMap [EnvironmentMap, beta, BucketName]
+                                !Sub "{{resolve:ssm:${BusinessUnit}-beta-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
                         - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
                         - ']'
@@ -749,7 +722,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MdpLambdasStackName]
+                    StackName: !Sub "${MdpLambdasStackPrefix}-beta-stack"
                     ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -770,7 +743,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MDPSecretsStackName]
+                    StackName: !Sub "${MdpSecretsStackPrefix}-beta-stack"
                     ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
@@ -787,7 +760,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MDPUtilsStackName]
+                    StackName: !Sub "${MDPUtilsStackPrefix}-beta-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
@@ -804,7 +777,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MDPNotificationsStackName]
+                    StackName: !Sub "${MDPNotificationsStackPrefix}-beta-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
@@ -821,7 +794,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, AirbyteStackName]
+                    StackName: !Sub "${AirbyteApplicationStackPrefix}-beta-stack"
                     ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
@@ -838,7 +811,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, AirflowStackName]
+                    StackName: !Sub "${AirflowApplicationStackPrefix}-beta-stack"
                     ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
@@ -855,7 +828,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, beta, MdpLambdasStackName]
+                    StackName: !Sub "${MdpLambdasStackPrefix}-beta-stack"
                     ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambdas-deploy-stack.yml'
@@ -879,13 +852,13 @@ Resources:
                         - Fn::Sub:
                             - '{"name":"MDP_BUCKET","value":"${MDPS3Bucket}","type":"PLAINTEXT"},'
                             - MDPS3Bucket:
-                                !FindInMap [EnvironmentMap, beta, BucketName]
+                                !Sub "{{resolve:ssm:${BusinessUnit}-beta-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
                         - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
                         - Fn::Sub:
                             - '{"name":"LAMBDA_STACK_NAME","value":"${MdpLambdasStackName}","type":"PLAINTEXT"}'
                             - MdpLambdasStackName:
-                                !FindInMap [EnvironmentMap, beta, MdpLambdasStackName]
+                                !Sub "${MdpLambdasStackPrefix}-beta-stack"
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
@@ -905,7 +878,7 @@ Resources:
                 NotificationArn:
                   Fn::If:
                     - UseMDPNotificationsStack
-                    - Fn::ImportValue: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+                    - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
                     - !Ref "AWS::NoValue"
                 CustomData: Please review the change set of all the desired stacks and set appropriate mdp secrets values(if applicable) before approving for further stage execution,
         - !If
@@ -921,7 +894,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MDPSecretsStackName]
+                    StackName: !Sub "${MdpSecretsStackPrefix}-prod-stack"
                     ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -942,7 +915,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MDPUtilsStackName]
+                    StackName: !Sub "${MDPUtilsStackPrefix}-prod-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -963,7 +936,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MDPNotificationsStackName]
+                    StackName: !Sub "${MDPNotificationsStackPrefix}-prod-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -984,7 +957,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, AirbyteStackName] 
+                    StackName: !Sub "${AirbyteApplicationStackPrefix}-prod-stack"
                     ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -1005,7 +978,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, AirflowStackName]
+                    StackName: !Sub "${AirflowApplicationStackPrefix}-prod-stack"
                     ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -1033,7 +1006,7 @@ Resources:
                         - Fn::Sub:
                             - '{"name":"MDP_BUCKET","value":"${MDPS3Bucket}","type":"PLAINTEXT"},'
                             - MDPS3Bucket:
-                                !FindInMap [EnvironmentMap, prod, BucketName]
+                                !Sub "{{resolve:ssm:${BusinessUnit}-prod-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
                         - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
                         - ']'
@@ -1050,7 +1023,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MdpLambdasStackName]
+                    StackName: !Sub "${MdpLambdasStackPrefix}-prod-stack"
                     ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_REPLACE
                     RoleArn: !GetAtt CodePipelineRole.Arn
@@ -1071,7 +1044,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MDPSecretsStackName]
+                    StackName: !Sub "${MdpSecretsStackPrefix}-prod-stack"
                     ChangeSetName: "mdp-secrets-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/secrets/mdp-secrets-stack.yml'
@@ -1088,7 +1061,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MDPUtilsStackName]
+                    StackName: !Sub "${MDPUtilsStackPrefix}-prod-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/mdp_utils/mdp-utils-stack.yml'
@@ -1105,7 +1078,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MDPNotificationsStackName]
+                    StackName: !Sub "${MDPNotificationsStackPrefix}-prod-stack"
                     ChangeSetName: "changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/notifications/mdp-notifications-stack.yml'
@@ -1122,7 +1095,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, AirbyteStackName]
+                    StackName: !Sub "${AirbyteApplicationStackPrefix}-prod-stack"
                     ChangeSetName: "airbyte-stack-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airbyte/airbyte-application-stack.yml'
@@ -1139,7 +1112,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, AirflowStackName]
+                    StackName: !Sub "${AirflowApplicationStackPrefix}-prod-stack"
                     ChangeSetName: "airflow-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/airflow/airflow-application-stack.yml'
@@ -1156,7 +1129,7 @@ Resources:
                     Provider: CloudFormation
                     Version: '1'
                   Configuration:
-                    StackName: !FindInMap [EnvironmentMap, prod, MdpLambdasStackName]
+                    StackName: !Sub "${MdpLambdasStackPrefix}-prod-stack"
                     ChangeSetName: "lambdas-changes-#{codepipeline.PipelineExecutionId}"
                     ActionMode: CHANGE_SET_EXECUTE
                     TemplatePath: 'SourceCodeRepositoryDefault::cloudformation/resource_stacks/lambdas/lambdas-deploy-stack.yml'
@@ -1180,13 +1153,13 @@ Resources:
                         - Fn::Sub:
                             - '{"name":"MDP_BUCKET","value":"${MDPS3Bucket}","type":"PLAINTEXT"},'
                             - MDPS3Bucket:
-                                !FindInMap [EnvironmentMap, prod, BucketName]
+                                !Sub "{{resolve:ssm:${BusinessUnit}-prod-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
                         - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
                         - Fn::Sub:
                             - '{"name":"LAMBDA_STACK_NAME","value":"${MdpLambdasStackName}","type":"PLAINTEXT"}'
                             - MdpLambdasStackName:
-                                !FindInMap [EnvironmentMap, prod, MdpLambdasStackName]
+                                !Sub "${MdpLambdasStackPrefix}-prod-stack"
                         - ']'
                   RunOrder: 7
                   InputArtifacts:

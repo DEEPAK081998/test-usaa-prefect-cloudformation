@@ -4,8 +4,8 @@
     "Owner": "dbansal@homestoryrewards.com",
     "Project": "managed-data-pipeline",
     "Environment": "beta",
-    "BusinessUnit": "chase",
-    "PartnerEmailS3BucketName": "mdp-utils-beta-chase-partner-email-bucket-dev",
-    "MdpS3BucketName": "mdp-beta-chase-bucket-dev"
+    "BusinessUnit": "usaa",
+    "PartnerEmailS3BucketName": "mdp-utils-beta-usaa-partner-email-bucket-dev",
+    "MdpS3BucketName": "mdp-beta-usaa-bucket-dev"
   }
 }

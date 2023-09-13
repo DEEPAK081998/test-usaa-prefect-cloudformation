@@ -29,7 +29,7 @@
   },
   {
     "ParameterKey": "AirbyteApplicationStackPrefix",
-    "ParameterValue": ""
+    "ParameterValue": "airbyte"
   },
   {
     "ParameterKey": "MdpSecretsStackPrefix",
@@ -45,7 +45,7 @@
   },
   {
     "ParameterKey": "AirflowApplicationStackPrefix",
-    "ParameterValue": ""
+    "ParameterValue": "airflow"
   },
   {
     "ParameterKey": "MDPNotificationsStackPrefix",
@@ -65,7 +65,7 @@
   },
   {
     "ParameterKey": "MdpLambdasStackPrefix",
-    "ParameterValue": ""
+    "ParameterValue": "mdp-lambdas"
   },
   {
     "ParameterKey": "DeploySandboxEnv",
@@ -81,6 +81,6 @@
   },
   {
     "ParameterKey": "UseMDPNotificationsStack",
-    "ParameterValue": "no"
+    "ParameterValue": "yes"
   }
 ]
