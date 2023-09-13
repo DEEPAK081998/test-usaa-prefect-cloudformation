@@ -7,8 +7,8 @@
     "BusinessUnit": "usaa",
     "LambdaS3Key": "lambdas/lambda-code",
     "LambdaLayerS3Key": "lambdas/lambda-layer",
-    "MessagePollingRate": "6000",
-    "LambdaScheduleExpression": "cron(0/5 * * * ? *)",
+    "WebHooksLambdaMessagePollingRate": "6000",
+    "WebHooksLambdaScheduleExpression": "cron(0/5 * * * ? *)",
     "BitlyGroupId": "Bkclk4VG8Ix"
   }
 }
