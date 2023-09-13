@@ -264,22 +264,6 @@ Resources:
       Stages:
         - Name: Source
           Actions:
-            - Name: GetSourceCodeRepository
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: CodeStarSourceConnection
-                Version: '1'
-              Configuration:
-                ConnectionArn: !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
-                BranchName: !Ref SourceBranchName
-                FullRepositoryId: !Ref FullRepositoryName
-                OutputArtifactFormat: CODEBUILD_CLONE_REF
-                DetectChanges: true
-              OutputArtifacts:
-                - Name: SourceCodeRepository
-              Namespace: SourceVariables
-              RunOrder: 1
             - Name: GetSourceCodeRepositoryDefault
               ActionTypeId:
                 Category: Source
@@ -422,11 +406,11 @@ Resources:
                             - MDPS3Bucket:
                                 !Sub "{{resolve:ssm:${BusinessUnit}-sandbox-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
-                        - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
+                        - !Sub '{"name":"LAMBDA_LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
                         - ']'
                   RunOrder: 1
                   InputArtifacts:
-                    - Name: SourceCodeRepository
+                    - Name: SourceCodeRepositoryDefault
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackPrefixPresent
@@ -569,7 +553,7 @@ Resources:
                             - MDPS3Bucket:
                                 !Sub "{{resolve:ssm:${BusinessUnit}-sandbox-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
-                        - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
+                        - !Sub '{"name":"LAMBDA_LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
                         - Fn::Sub:
                             - '{"name":"LAMBDA_STACK_NAME","value":"${MdpLambdasStackName}","type":"PLAINTEXT"}'
                             - MdpLambdasStackName:
@@ -577,7 +561,7 @@ Resources:
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
-                    - Name: SourceCodeRepository
+                    - Name: SourceCodeRepositoryDefault
                 - !Ref "AWS::NoValue"
           - !Ref "AWS::NoValue"
         - !If
@@ -707,11 +691,11 @@ Resources:
                             - MDPS3Bucket:
                                 !Sub "{{resolve:ssm:${BusinessUnit}-beta-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
-                        - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
+                        - !Sub '{"name":"LAMBDA_LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
                         - ']'
                   RunOrder: 1
                   InputArtifacts:
-                    - Name: SourceCodeRepository
+                    - Name: SourceCodeRepositoryDefault
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackPrefixPresent
@@ -854,7 +838,7 @@ Resources:
                             - MDPS3Bucket:
                                 !Sub "{{resolve:ssm:${BusinessUnit}-beta-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
-                        - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
+                        - !Sub '{"name":"LAMBDA_LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
                         - Fn::Sub:
                             - '{"name":"LAMBDA_STACK_NAME","value":"${MdpLambdasStackName}","type":"PLAINTEXT"}'
                             - MdpLambdasStackName:
@@ -862,7 +846,7 @@ Resources:
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
-                    - Name: SourceCodeRepository
+                    - Name: SourceCodeRepositoryDefault
                 - !Ref "AWS::NoValue"
           - !Ref "AWS::NoValue"
         - Name: Approval
@@ -1008,11 +992,11 @@ Resources:
                             - MDPS3Bucket:
                                 !Sub "{{resolve:ssm:${BusinessUnit}-prod-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
-                        - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
+                        - !Sub '{"name":"LAMBDA_LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"}'
                         - ']'
                   RunOrder: 1
                   InputArtifacts:
-                    - Name: SourceCodeRepository
+                    - Name: SourceCodeRepositoryDefault
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackPrefixPresent
@@ -1155,7 +1139,7 @@ Resources:
                             - MDPS3Bucket:
                                 !Sub "{{resolve:ssm:${BusinessUnit}-prod-s3-bucket-name}}"
                         - !Sub '{"name":"LAMBDA_CODE_S3_PATH","value":"${LambdaCodeS3Path}","type":"PLAINTEXT"},'
-                        - !Sub '{"name":"LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
+                        - !Sub '{"name":"LAMBDA_LAYER_S3_PATH","value":"${LayerS3Path}","type":"PLAINTEXT"},'
                         - Fn::Sub:
                             - '{"name":"LAMBDA_STACK_NAME","value":"${MdpLambdasStackName}","type":"PLAINTEXT"}'
                             - MdpLambdasStackName:
@@ -1163,7 +1147,7 @@ Resources:
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
-                    - Name: SourceCodeRepository
+                    - Name: SourceCodeRepositoryDefault
                 - !Ref "AWS::NoValue"
           - !Ref "AWS::NoValue"
       Tags:
