@@ -29,7 +29,7 @@
   },
   {
     "ParameterKey": "AirbyteApplicationStackPrefix",
-    "ParameterValue": "airbyte"
+    "ParameterValue": ""
   },
   {
     "ParameterKey": "MdpSecretsStackPrefix",
@@ -45,7 +45,7 @@
   },
   {
     "ParameterKey": "AirflowApplicationStackPrefix",
-    "ParameterValue": "airflow"
+    "ParameterValue": ""
   },
   {
     "ParameterKey": "MDPNotificationsStackPrefix",

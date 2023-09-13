@@ -40,9 +40,13 @@ Parameters:
   BitlyGroupId:
     Type: String
     Description: Group ID for Bitly api call
-  EC2Subnet:
-    Description: The subnet id in which to launch instance into
-    Type: AWS::SSM::Parameter::Value<String>
+  # EC2Subnet:
+  #   Description: The subnet id in which to launch instance into
+  #   Type: AWS::SSM::Parameter::Value<String>
+  # VpcId:
+  #   Description: >
+  #     VPC to use.  Must include two availability zones each with both a private (with NAT and VPN) and public subnet
+  #   Type: AWS::SSM::Parameter::Value<String>
 
 Conditions:
   IsSandboxEnv: !Equals [!Ref Environment, "sandbox"]
@@ -140,25 +144,25 @@ Resources:
         - Key: BusinessUnit
           Value: !Ref BusinessUnit
 
-  WebhooksSQSAccessPolicy:
-    Type: AWS::IAM::Policy
-    Description: Policy for allowed actions on sqs resource
-    Properties:
-      PolicyName: SQSAccessPolicy
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Action:
-              - sqs:ChangeMessageVisibility
-              - sqs:DeleteMessage
-              - sqs:GetQueueAttributes
-              - sqs:GetQueueUrl
-              - sqs:ReceiveMessage
-            Resource:
-              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-postmark-webhooks-sqs-queue-arn}}"
-      Roles:
-        - !Ref ProcessWebhookLambdaRole
+  # WebhooksSQSAccessPolicy:
+  #   Type: AWS::IAM::Policy
+  #   Description: Policy for allowed actions on sqs resource
+  #   Properties:
+  #     PolicyName: SQSAccessPolicy
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - sqs:ChangeMessageVisibility
+  #             - sqs:DeleteMessage
+  #             - sqs:GetQueueAttributes
+  #             - sqs:GetQueueUrl
+  #             - sqs:ReceiveMessage
+  #           Resource:
+  #             - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-postmark-webhooks-sqs-queue-arn}}"
+  #     Roles:
+  #       - !Ref ProcessWebhookLambdaRole
 
   S3AccessPolicy:
     Type: AWS::IAM::Policy
@@ -194,33 +198,33 @@ Resources:
         - !Ref ProcessWebhookLambdaRole 
         - !Ref BitlyLambdaProcessorRole
 
-  DynamoDbPolicy:
-    Type: AWS::IAM::Policy
-    Description: Policy to allow reading of dynamodb data
-    Properties:
-      PolicyName: !Sub "${Name}-${Environment}-DynamoDBReadPolicy"
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            "Action":
-              - "dynamodb:BatchGetItem"
-              - "dynamodb:ConditionCheckItem"
-              - "dynamodb:Scan"
-              - "dynamodb:Query"
-              - "dynamodb:DescribeTable"
-              - "dynamodb:GetItem"
-              - "dynamodb:DescribeStream"
-              - "dynamodb:GetRecords"
-              - "dynamodb:GetShardIterator"
-              - "dynamodb:ListStreams"
-            Resource:
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/mdp*/index/*"
-              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/mdp*"
-              - !GetAtt AirflowParamsDynamoDB.Arn
-              - !GetAtt AirflowParamsDynamoDB.StreamArn
-      Roles:
-        - !Ref DagsManagementLambdaRole  
+  # DynamoDbPolicy:
+  #   Type: AWS::IAM::Policy
+  #   Description: Policy to allow reading of dynamodb data
+  #   Properties:
+  #     PolicyName: !Sub "${Name}-${Environment}-DynamoDBReadPolicy"
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           "Action":
+  #             - "dynamodb:BatchGetItem"
+  #             - "dynamodb:ConditionCheckItem"
+  #             - "dynamodb:Scan"
+  #             - "dynamodb:Query"
+  #             - "dynamodb:DescribeTable"
+  #             - "dynamodb:GetItem"
+  #             - "dynamodb:DescribeStream"
+  #             - "dynamodb:GetRecords"
+  #             - "dynamodb:GetShardIterator"
+  #             - "dynamodb:ListStreams"
+  #           Resource:
+  #             - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/mdp*/index/*"
+  #             - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/mdp*"
+  #             - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-airflow-params-dynamodb-arn}}"
+  #             - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-airflow-params-dynamodb-stream-arn}}"
+  #     Roles:
+  #       - !Ref DagsManagementLambdaRole  
 
   S3Policy:
     Type: AWS::IAM::Policy
@@ -235,10 +239,10 @@ Resources:
             Resource:
               - Fn::Sub:
                   - "arn:aws:s3:::${S3BucketName}"
-                  - S3BucketName: !Sub "{{resolve:ssm:${Project}-${Environment}-s3-bucket-name}}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
               - Fn::Sub:
                   - "arn:aws:s3:::${S3BucketName}/*"
-                  - S3BucketName: !Sub "{{resolve:ssm:${Project}-${Environment}-s3-bucket-name}}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
           - Effect: Allow
             Action:
               - "s3:GetObject*"
@@ -252,16 +256,16 @@ Resources:
             Resource:
               - Fn::Sub:
                   - "arn:aws:s3:::${S3BucketName}"
-                  - S3BucketName: !Sub "{{resolve:ssm:${Project}-${Environment}-s3-bucket-name}}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
               - Fn::Sub:
                   - "arn:aws:s3:::${S3BucketName}/*"
-                  - S3BucketName: !Sub "{{resolve:ssm:${Project}-${Environment}-s3-bucket-name}}"
+                  - S3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
               - Fn::Sub:
                   - "arn:aws:s3:::${PartnerEmailS3BucketName}"
-                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${Project}-${Environment}-partner-email-s3-bucket-name}}"
+                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-partner-email-s3-bucket-name}}"
               - Fn::Sub:
                   - "arn:aws:s3:::${PartnerEmailS3BucketName}/*"
-                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${Project}-${Environment}-partner-email-s3-bucket-name}}"
+                  - PartnerEmailS3BucketName: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-partner-email-s3-bucket-name}}"
       Roles:
         - !Ref DagsManagementLambdaRole
 
@@ -277,26 +281,26 @@ Resources:
             Action:
               - sns:Publish
             Resource:
-              - !Sub "{{resolve:ssm:${Project}-${Environment}-data-pipeline-errors-topic-arn}}"
+              - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
       Roles:
         - !Ref DagsManagementLambdaRole
 
-  LambdaInvokePolicy:
-    Type: AWS::IAM::Policy
-    Description: Policy for invoke actions on lambda resource
-    Properties:
-      PolicyName: LambdaInvocationPolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - lambda:InvokeFunction
-            Resource:
-              - !GetAtt UpdateBitlyClicksLambda.Arn
-              - !GetAtt UpdateBitlyLinksLambda.Arn
-      Roles:
-        - !Sub "{{resolve:ssm:${Project}-${Environment}-airflow-execution-role-name}}"
+  # LambdaInvokePolicy:
+  #   Type: AWS::IAM::Policy
+  #   Description: Policy for invoke actions on lambda resource
+  #   Properties:
+  #     PolicyName: LambdaInvocationPolicy
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - lambda:InvokeFunction
+  #           Resource:
+  #             - !GetAtt UpdateBitlyClicksLambda.Arn
+  #             - !GetAtt UpdateBitlyLinksLambda.Arn
+  #     Roles:
+  #       - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-airflow-execution-role-name}}"
 
   ProcessWebhookLambda:
     Type: AWS::Lambda::Function
@@ -305,10 +309,10 @@ Resources:
       Code:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaS3Key}/${WebhooksProcessLambdaZipName}"
+        S3Key: !Sub "${LambdaS3Key}/process_webhook_lambda.zip"
       Environment:
         Variables:
-          WEBHOOKS_QUEUE_NAME: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-postmark-webhooks-sqs-queue-name}}"
+          # WEBHOOKS_QUEUE_NAME: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-postmark-webhooks-sqs-queue-name}}"
           S3_BUCKET_NAME:
             !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
           QUEUE_MAX_BATCH_SIZE: 10
@@ -347,53 +351,50 @@ Resources:
       Principal: "events.amazonaws.com"
       SourceArn: !GetAtt WebhooksScheduleRule.Arn
 
-  BitlyLambdaSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupName: !Sub "${Name}-${Environment}-bitly-lambda-sg"
-      GroupDescription: Enable port 443 HTTPS.
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '10.0.0.0/8'
-      VpcId: !Ref VpcId
-      Tags:
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: BusinessUnit
-          Value: !Ref BusinessUnit
+  # BitlyLambdaSecurityGroup:
+  #   Type: 'AWS::EC2::SecurityGroup'
+  #   Properties:
+  #     GroupName: !Sub "${Name}-${Environment}-bitly-lambda-sg"
+  #     GroupDescription: Enable port 443 HTTPS.
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: '10.0.0.0/8'
+  #     VpcId: !Ref VpcId
+  #     Tags:
+  #       - Key: Owner
+  #         Value: !Ref Owner
+  #       - Key: Project
+  #         Value: !Ref Project
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: BusinessUnit
+  #         Value: !Ref BusinessUnit
 
-  BitlyClicksLambdaAwsPackageLayer:
+  UpdateBitlyClicksLambdaLayer:
     Type: AWS::Lambda::LayerVersion
     Description: Layer to store extra python packages required by bitly clicks lambda function
-    LayerName: UpdateBitlyClicksLambdaLayer
     Properties:
       CompatibleRuntimes:
         - python3.10
       Content:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaLayerS3Key}/${BitlyLambdaLayerZipName}" 
+        S3Key: !Sub "${LambdaLayerS3Key}/update_bitly_clicks_lambda_layer.zip" 
       Description: Adds the additional packages for lambda function to work
 
-  BitlyLinksLambdaAwsPackageLayer:
-      Type: AWS::Lambda::LayerVersion
-      Description: Layer to store extra python packages required by bitly links lambda function
-      LayerName: UpdateBitlyLinksLambdaLayer
-      Properties:
-        CompatibleRuntimes:
-          - python3.10
-        Content:
-          S3Bucket:
-            !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-          S3Key: !Sub "${LambdaLayerS3Key}/${BitlyLambdaLayerZipName}" 
-        Description: Adds the additional packages for lambda function to work
-
+  UpdateBitlyLinksLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Description: Layer to store extra python packages required by bitly links lambda function
+    Properties:
+      CompatibleRuntimes:
+        - python3.10
+      Content:
+        S3Bucket:
+          !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
+        S3Key: !Sub "${LambdaLayerS3Key}/update_bitly_links_lambda_layer.zip" 
+      Description: Adds the additional packages for lambda function to work
 
   UpdateBitlyLinksLambda:
     Type: AWS::Lambda::Function
@@ -415,15 +416,15 @@ Resources:
         - !Ref BitlyLinksLambdaAwsPackageLayer
       Timeout: 300
       Role: !GetAtt BitlyLambdaProcessorRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !GetAtt BitlyLambdaSecurityGroup.GroupId
-        SubnetIds:
-          - !Ref EC2Subnet
+      # VpcConfig:
+      #   SecurityGroupIds:
+      #     - !GetAtt BitlyLambdaSecurityGroup.GroupId
+      #   SubnetIds:
+      #     - !Ref EC2Subnet
       Code:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaS3Key}/${UpdateBitlyLinksLambdaZipName}" 
+        S3Key: !Sub "${LambdaS3Key}/update_bitly_links_lambda.zip" 
       Tags:
         - Key: Owner
           Value: !Ref Owner
@@ -454,15 +455,15 @@ Resources:
         - !Ref BitlyClicksLambdaAwsPackageLayer
       Timeout: 300
       Role: !GetAtt BitlyLambdaProcessorRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !GetAtt BitlyLambdaSecurityGroup.GroupId
-        SubnetIds:
-          - !Ref EC2Subnet
+      # VpcConfig:
+      #   SecurityGroupIds:
+      #     - !GetAtt BitlyLambdaSecurityGroup.GroupId
+      #   SubnetIds:
+      #     - !Ref EC2Subnet
       Code:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaS3Key}/${UpdateBitlyClicksLambdaZipName}"
+        S3Key: !Sub "${LambdaS3Key}/update_bitly_clicks_lambda.zip"
       Tags:
         - Key: Owner
           Value: !Ref Owner
@@ -527,7 +528,7 @@ Resources:
       Code:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaS3Key}/${DagsManagementLambdaZipName}"
+        S3Key: !Sub "${LambdaS3Key}/dags_management_lambda.zip"
       Handler: lambda_handler.lambda_handler
       Role: !GetAtt DagsManagementLambdaRole.Arn
       Runtime: python3.10
@@ -547,23 +548,22 @@ Resources:
         - Key: BusinessUnit
           Value: !Ref BusinessUnit
 
-  DagsManagementLambdaEventSourceMapping:
-    Type: AWS::Lambda::EventSourceMapping
-    Description: Source event trigger to trigger lambda when row is created/updated in dynamodb
-    Properties:
-      BatchSize: 1
-      MaximumRetryAttempts: 2
-      StartingPosition: LATEST
-      DestinationConfig:
-        OnFailure:
-          Destination: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
-      EventSourceArn: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-airflow-params-dynamo-table-arn}}"
-      FunctionName: !Ref DagsManagementLambda
+  # DagsManagementLambdaEventSourceMapping:
+  #   Type: AWS::Lambda::EventSourceMapping
+  #   Description: Source event trigger to trigger lambda when row is created/updated in dynamodb
+  #   Properties:
+  #     BatchSize: 1
+  #     MaximumRetryAttempts: 2
+  #     StartingPosition: LATEST
+  #     DestinationConfig:
+  #       OnFailure:
+  #         Destination: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
+  #     EventSourceArn: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-airflow-params-dynamo-table-arn}}"
+  #     FunctionName: !Ref DagsManagementLambda
 
   DagsManagementLambdaLayer:
     Type: AWS::Lambda::LayerVersion
     Description: Lambda layer to provide proper working of lambda
-    LayerName: DagsManagementLambdaLayer
     Properties:
       Description: Lambda layer for dags working
       CompatibleRuntimes:
@@ -571,9 +571,9 @@ Resources:
       Content:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaLayerS3Key}/${DagsManagementLambdaLayerZipName}"
+        S3Key: !Sub "${LambdaLayerS3Key}/dags_management_lambda_layer.zip"
   
-  SendNotificationsLambdaRole:
+  SendNotificationLambdaRole:
     Type: AWS::IAM::Role
     Description: IAM Role for lambda function
     Properties:
@@ -600,16 +600,16 @@ Resources:
         - Key: BusinessUnit
           Value: !Ref BusinessUnit
   
-  SendNotificationsLambda:
+  SendNotificationLambda:
     Type: AWS::Lambda::Function
     Description: Lambda function that handles notification
     Properties:
       Code:
         S3Bucket:
           !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-s3-bucket-name}}"
-        S3Key: !Sub "${LambdaS3Key}/${NotificationsLambdaZipName}"
+        S3Key: !Sub "${LambdaS3Key}/send_notification_lambda.zip"
       Handler: lambda_handler.lambda_handler
-      Role: !GetAtt SendNotificationsLambdaRole.Arn
+      Role: !GetAtt SendNotificationLambdaRole.Arn
       Runtime: python3.7
       Tags:
         - Key: Owner
@@ -621,17 +621,17 @@ Resources:
         - Key: BusinessUnit
           Value: !Ref BusinessUnit
 
-  SendNotificationsLambdaInvokePermission:
+  SendNotificationLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       Principal: sns.amazonaws.com
       SourceArn: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
-      FunctionName: !Ref SendNotificationsLambda
+      FunctionName: !Ref SendNotificationLambda
 
   NotificationLambdaSNSSubscription:
     Type: AWS::SNS::Subscription
     Properties:
-      Endpoint: !GetAtt SendNotificationsLambda.Arn
+      Endpoint: !GetAtt SendNotificationLambda.Arn
       Protocol: lambda
       TopicArn: !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
