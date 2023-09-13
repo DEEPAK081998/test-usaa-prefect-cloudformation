@@ -264,6 +264,22 @@ Resources:
       Stages:
         - Name: Source
           Actions:
+            - Name: GetSourceCodeRepository
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
+                BranchName: !Ref SourceBranchName
+                FullRepositoryId: !Ref FullRepositoryName
+                OutputArtifactFormat: CODEBUILD_CLONE_REF
+                DetectChanges: true
+              OutputArtifacts:
+                - Name: SourceCodeRepository
+              Namespace: SourceVariables
+              RunOrder: 1
             - Name: GetSourceCodeRepositoryDefault
               ActionTypeId:
                 Category: Source
@@ -410,7 +426,7 @@ Resources:
                         - ']'
                   RunOrder: 1
                   InputArtifacts:
-                    - Name: SourceCodeRepositoryDefault
+                    - Name: SourceCodeRepository
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackPrefixPresent
@@ -561,7 +577,7 @@ Resources:
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
-                    - Name: SourceCodeRepositoryDefault
+                    - Name: SourceCodeRepository
                 - !Ref "AWS::NoValue"
           - !Ref "AWS::NoValue"
         - !If
@@ -695,7 +711,7 @@ Resources:
                         - ']'
                   RunOrder: 1
                   InputArtifacts:
-                    - Name: SourceCodeRepositoryDefault
+                    - Name: SourceCodeRepository
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackPrefixPresent
@@ -846,7 +862,7 @@ Resources:
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
-                    - Name: SourceCodeRepositoryDefault
+                    - Name: SourceCodeRepository
                 - !Ref "AWS::NoValue"
           - !Ref "AWS::NoValue"
         - Name: Approval
@@ -996,7 +1012,7 @@ Resources:
                         - ']'
                   RunOrder: 1
                   InputArtifacts:
-                    - Name: SourceCodeRepositoryDefault
+                    - Name: SourceCodeRepository
                 - !Ref "AWS::NoValue"
               - !If
                 - MDPLambdasStackPrefixPresent
@@ -1147,7 +1163,7 @@ Resources:
                         - ']'
                   RunOrder: 7
                   InputArtifacts:
-                    - Name: SourceCodeRepositoryDefault
+                    - Name: SourceCodeRepository
                 - !Ref "AWS::NoValue"
           - !Ref "AWS::NoValue"
       Tags:
