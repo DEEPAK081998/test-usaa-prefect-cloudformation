@@ -33,7 +33,7 @@
   },
   {
     "ParameterKey": "MdpSecretsStackPrefix",
-    "ParameterValue": ""
+    "ParameterValue": "mdp-secrets"
   },
   {
     "ParameterKey": "CodeStarConnectionId",
@@ -49,7 +49,7 @@
   },
   {
     "ParameterKey": "MDPNotificationsStackPrefix",
-    "ParameterValue": ""
+    "ParameterValue": "mdp-notifications"
   },
   {
     "ParameterKey": "LambdaCodeS3Path",
@@ -65,7 +65,7 @@
   },
   {
     "ParameterKey": "MdpLambdasStackPrefix",
-    "ParameterValue": ""
+    "ParameterValue": "lambda-stack"
   },
   {
     "ParameterKey": "DeploySandboxEnv",

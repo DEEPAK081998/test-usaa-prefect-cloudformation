@@ -415,7 +415,7 @@ Resources:
           sudo chmod +x /usr/local/bin/docker-compose
           mkdir /home/ec2-user/airbyte
           cd /home/ec2-user/airbyte
-          wget https://raw.githubusercontent.com/airbytehq/airbyte-platform/v0.43.0/{.env,docker-compose.yaml}
+          wget https://raw.githubusercontent.com/airbytehq/airbyte-platform/v0.43.0/{.env,docker-compose.yaml,flags.yml}
           sudo cp .env .env.backup
           sudo amazon-linux-extras enable nginx1
           sudo yum clean metadata
