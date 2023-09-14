@@ -186,6 +186,7 @@ Resources:
             Statement:
               - Action:
                   - codestar-connections:UseConnection
+                  - codestar-connections:GetConnection
                 Effect: Allow
                 Resource:
                   - !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
@@ -195,19 +196,111 @@ Resources:
                 Effect: Allow
                 Resource: '*'
               - Action:
-                  - s3:*
+                  - iam:PassRole
                 Effect: Allow
-                Resource:
-                  - !Sub "arn:aws:s3:::${S3ArtifactBucket}"
+                Resource: '*'
+              - Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:SetStackPolicy
+                  - cloudformation:ValidateTemplate
+                Effect: Allow
+                Resource: "*"
             Version: '2012-10-17'
           PolicyName: codepipelinepolicy
         - PolicyDocument:
+            Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action: '*'
-                Resource: '*'  
-            Version: "2012-10-17"
-          PolicyName: root-policy
+              - Action:
+                  # - 'apigateway:*'
+                  # - 'cognito-idp:*'
+                  # - 'dynamodb:*'
+                  # - 'ec2:*'
+                  # - 'elasticloadbalancing:*'
+                  # - 'events:*'
+                  - 'iam:*'
+                  # - 'lambda:*'
+                  - 's3:*'
+                  # - 'sns:*'
+                  # - 'sqs:*'
+                  # - 'rds:*'
+                Effect: 'Allow'
+                Resource: '*'
+              - Action:
+                  - secretsmanager:Get*
+                  - secretsmanager:Describe*
+                  - secretsmanager:Create*
+                  - secretsmanager:Update*
+                  - secretsmanager:Put*
+                  - secretsmanager:Tag*
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - ssm:GetParameters
+                  - ssm:DeleteParameter
+                  - ssm:PutParameter
+                  - ssm:AddTagsToResource
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:*:ssm:*:*:${BusinessUnit}-sandbox*"
+                  - !Sub "arn:*:ssm:*:*:${BusinessUnit}-beta*"
+                  - !Sub "arn:*:ssm:*:*:${BusinessUnit}-prod*"
+              - Action:
+                  - ecr:*
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:*:ecr:*:*:mdp-utils-sandbox*"
+                  - !Sub "arn:*:ssm:*:*:mdp-utils-beta*"
+                  - !Sub "arn:*:ssm:*:*:mdp-utils-prod*"
+              # - Action:
+              #     - sns:*
+              #   Effect: Allow
+              #   Resources:
+              #     - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-mdp-codepipeline-approval-topic-arn}}"
+              #     - !Sub "{{resolve:ssm:${BusinessUnit}-${Environment}-data-pipeline-errors-topic-arn}}"
+              # - Action: '*'
+              #   Effect: Allow
+              #   Resource:
+              #     - "*airbyte-infra-sandbox*"
+              #     - "*airbyte-infra-beta*"
+              #     - "*airbyte-infra-prod*"
+              #     - "*airflow-infra-sandbox*"
+              #     - "*airflow-infra-beta*"
+              #     - "*airflow-infra-prod*"
+              #     - "*lambda-stack-sandbox*"
+              #     - "*lambda-stack-beta*"
+              #     - "*lambda-stack-prod*"
+              #     - "*mdp-utils-sandbox*"
+              #     - "*mdp-utils-beta*"
+              #     - "*mdp-utils-prod*"
+              #     - "*mdp-notifications-sandbox*"
+              #     - "*mdp-notifications-beta*"
+              #     - "*mdp-notifications-prod*"
+              #     - "*mdp-secrets-sandbox*"
+              #     - "*mdp-secrets-beta*"
+              #     - "*mdp-secrets-prod*"
+              # - Action:
+              #     - route53:GetHostedZone
+              #     - route53:ChangeResourceRecordSets
+              #     - route53:ListResourceRecordSets
+              #     - route53:GetChange
+              #   Effect: Allow
+              #   Resource: "*"
+              # - Action:
+              #     - rds:*
+              #   Effect: Allow
+              #   Resource: '*'
+              # - Action:
+              #     - cloudwatch:*
+              #   Effect: Allow
+              #   Resource: '*'
+          PolicyName: !Sub "${Name}-${Environment}-pipeline-policy"
       Tags:
         - Key: Name
           Value: !Ref Name
@@ -233,13 +326,38 @@ Resources:
         Version: '2012-10-17'
       Path: /
       Policies:
-        - PolicyName: root
+        - PolicyName: !Sub '${Name}-${Environment}-codebuild-policy'
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action: '*'
+              - Sid: CodestarConnectionPolicy
+                Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource:
+                  - !Sub "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/${CodeStarConnectionId}"
+              - Sid: S3Policy
+                Effect: Allow
+                Action:
+                  - s3:*
                 Resource: '*'
+              - Sid: LambdaPolicy
+                Effect: Allow
+                Action:
+                  - lambda:*
+                Resource: '*'
+              - Sid: CloudWatchLogsPolicy
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Sid: CloudformationPolicy
+                Action:
+                  - cloudformation:ListStackResources
+                Effect: Allow
+                Resource: "*"
       Tags:
         - Key: Name
           Value: !Ref Name
