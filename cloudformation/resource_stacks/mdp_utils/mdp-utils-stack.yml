@@ -178,6 +178,22 @@ Resources:
         - Key: BusinessUnit
           Value: !Ref BusinessUnit
 
+  AirbyteCodebuildEC2Key:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub "${Name}-${Environment}-codebuild-airbyte-ssh-key"
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: BusinessUnit
+          Value: !Ref BusinessUnit
+
   MdpCustomIamUserSecretArnParameter:
     Type: AWS::SSM::Parameter
     Condition: IsSandboxEnv
@@ -235,3 +251,11 @@ Resources:
         Project: !Ref Project
         Environment: !Ref Environment
         BusinessUnit: !Ref BusinessUnit
+
+Outputs:
+  CodebuildKeyPairId:
+    Description: EC2 key pair id
+    Value: !GetAtt AirbyteCodebuildEC2Key.KeyPairId
+  ParameterStoreSSHKeyName:
+    Description: The name of the parameter store where ec2 sshh key is stored
+    Value: !Sub "/ec2/keypair/${AirbyteCodebuildEC2Key.KeyPairId}"
